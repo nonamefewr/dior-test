@@ -7,10 +7,10 @@ const pool = mysql.createPool({
   password: process.env.DB_PASS || 'Namzee@10112002',
   database: process.env.DB_NAME || 'dior_platform',
   waitForConnections: true,
-  connectionLimit: 10,
+  connectionLimit: parseInt(process.env.DB_POOL_SIZE || '20'),
   charset: 'utf8mb4',
   ssl: process.env.DB_HOST && process.env.DB_HOST !== 'localhost' ? { minVersion: 'TLSv1.2', rejectUnauthorized: false } : undefined,
-  multipleStatements: true
+  multipleStatements: false
 });
 
 async function initDB() {
@@ -115,7 +115,7 @@ async function initDB() {
     await conn.query(`CREATE TABLE IF NOT EXISTS transactions (
       id INT AUTO_INCREMENT PRIMARY KEY,
       user_id INT NOT NULL,
-      type ENUM('deposit','withdraw','order_deduct','order_refund','commission','admin_adjust','referral_bonus','order_lock','lock_topup') NOT NULL,
+      type ENUM('deposit','withdraw','order_deduct','order_refund','commission','admin_adjust','referral_bonus','order_lock','lock_topup','unlock') NOT NULL,
       amount DECIMAL(12,2) NOT NULL,
       balance_before DECIMAL(12,2) DEFAULT 0.00,
       balance_after DECIMAL(12,2) DEFAULT 0.00,
@@ -188,7 +188,7 @@ async function initDB() {
 
     // Migrate: add new transaction types to ENUM
     try {
-      await conn.query("ALTER TABLE transactions MODIFY COLUMN type ENUM('deposit','withdraw','order_deduct','order_refund','commission','admin_adjust','referral_bonus','order_lock','lock_topup') NOT NULL");
+      await conn.query("ALTER TABLE transactions MODIFY COLUMN type ENUM('deposit','withdraw','order_deduct','order_refund','commission','admin_adjust','referral_bonus','order_lock','lock_topup','unlock') NOT NULL");
       console.log('[DB] Updated transactions.type ENUM');
     } catch(e) { /* ignore if already updated */ }
 
@@ -221,6 +221,18 @@ async function initDB() {
       created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
       FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
     ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4`);
+
+    // ===== INDEXES for performance =====
+    const indexes = [
+      'CREATE INDEX IF NOT EXISTS idx_orders_user_status ON orders(user_id, status)',
+      'CREATE INDEX IF NOT EXISTS idx_orders_user_pkg ON orders(user_id, package_id, status)',
+      'CREATE INDEX IF NOT EXISTS idx_tx_user_created ON transactions(user_id, created_at)',
+      'CREATE INDEX IF NOT EXISTS idx_wd_user_status ON withdrawals(user_id, status)',
+      'CREATE INDEX IF NOT EXISTS idx_users_active_pkg ON users(active_package_id)',
+    ];
+    for (const idx of indexes) {
+      try { await conn.query(idx); } catch(e) { /* ignore if exists */ }
+    }
 
     console.log('[DB] Tables initialized successfully');
   } finally {

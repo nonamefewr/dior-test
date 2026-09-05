@@ -1,24 +1,39 @@
 const express = require('express');
 const cors = require('cors');
 const helmet = require('helmet');
+const compression = require('compression');
 const jwt = require('jsonwebtoken');
 const bcrypt = require('bcryptjs');
 const rateLimit = require('express-rate-limit');
 const { WebSocketServer, WebSocket } = require('ws');
 const http = require('http');
 const path = require('path');
-const { v4: uuidv4 } = require('uuid');
 const { pool, initDB } = require('./db');
 
 const app = express();
 const server = http.createServer(app);
 const PORT = process.env.PORT || 3000;
-const JWT_SECRET = process.env.JWT_SECRET || 'dior_platform_secret_2026_' + uuidv4().slice(0,8);
+// Trust proxy (required for rate-limit behind Render/Nginx)
+app.set('trust proxy', 1);
+const JWT_SECRET = process.env.JWT_SECRET || 'dior_platform_secret_2026_deploy';
 const JWT_EXPIRES = '7d';
 // Chế độ test: chỉ bật khi TEST_MODE=1 (VD: TEST_MODE=1 node server.js). Production phải để trống.
 const TEST_MODE = process.env.TEST_MODE === '1';
 
+// Simple in-memory cache (TTL-based)
+const memCache = new Map();
+function cacheGet(key) {
+  const e = memCache.get(key);
+  if (!e) return null;
+  if (Date.now() > e.exp) { memCache.delete(key); return null; }
+  return e.val;
+}
+function cacheSet(key, val, ttlMs = 30000) {
+  memCache.set(key, { val, exp: Date.now() + ttlMs });
+}
+
 // ==================== SECURITY ====================
+app.use(compression());
 app.use(helmet({ contentSecurityPolicy: false, crossOriginEmbedderPolicy: false }));
 app.use(cors({ origin: true, credentials: true }));
 app.use(express.json({ limit: '1mb' }));
@@ -72,6 +87,7 @@ function success(data = null, msg = '') {
   return r;
 }
 function fail(msg = 'Lỗi') { return { success: false, error: msg }; }
+function capLimit(val, max = 100) { return Math.min(Math.max(parseInt(val) || 20, 1), max); }
 
 // ==================== AUTH ROUTES ====================
 app.post('/api/auth/register', authLimiter, async (req, res) => {
@@ -84,7 +100,7 @@ app.post('/api/auth/register', authLimiter, async (req, res) => {
     const [existing] = await pool.query('SELECT id FROM users WHERE username=? OR email=?', [sanitize(username), sanitize(email)]);
     if (existing.length > 0) return res.status(400).json(fail('Tên đăng nhập hoặc email đã tồn tại'));
 
-    const hash = await bcrypt.hash(password, 12);
+    const hash = await bcrypt.hash(password, 10);
     const ref = generateRefCode();
     let referredBy = null;
     if (ref_code) {
@@ -201,11 +217,17 @@ app.put('/api/user/password', authMiddleware, async (req, res) => {
 // ==================== PACKAGES ====================
 app.get('/api/packages', authMiddleware, async (req, res) => {
   try {
-    const [packages] = await pool.query('SELECT * FROM packages WHERE is_active=1 ORDER BY tier_level ASC');
-    for (let p of packages) {
-      const [cnt] = await pool.query('SELECT COUNT(*) as cnt FROM package_products pp JOIN products pr ON pp.product_id=pr.id WHERE pp.package_id=? AND pp.is_active=1 AND pr.is_active=1', [p.id]);
-      p.product_count = cnt[0].cnt;
-    }
+    const cached = cacheGet('packages_list');
+    if (cached) return res.json(success(cached));
+    const [packages] = await pool.query(
+      `SELECT p.*, COUNT(DISTINCT pp.product_id) as product_count
+       FROM packages p
+       LEFT JOIN package_products pp ON p.id = pp.package_id AND pp.is_active=1
+       LEFT JOIN products pr ON pp.product_id = pr.id AND pr.is_active=1
+       WHERE p.is_active=1
+       GROUP BY p.id ORDER BY p.tier_level ASC`
+    );
+    cacheSet('packages_list', packages, 60000);
     res.json(success(packages));
   } catch(e) { res.status(500).json(fail('Lỗi server')); }
 });
@@ -221,28 +243,31 @@ app.get('/api/user/packages', authMiddleware, async (req, res) => {
   try {
     const [user] = await pool.query('SELECT active_package_id, total_deposit, balance, locked_amount FROM users WHERE id=?', [req.user.id]);
     if (user.length === 0) return res.status(404).json(fail('Không tìm thấy'));
-    const [packages] = await pool.query('SELECT * FROM packages WHERE is_active=1 ORDER BY tier_level ASC');
 
-    // Get progress for each package
-    const result = [];
-    for (const p of packages) {
-      const isUnlocked = parseFloat(user[0].total_deposit) >= parseFloat(p.min_deposit);
-      const [prog] = await pool.query('SELECT * FROM user_package_progress WHERE user_id=? AND package_id=?', [req.user.id, p.id]);
-      const progress = prog.length > 0 ? prog[0] : null;
-      const [pCnt] = await pool.query('SELECT COUNT(*) as cnt FROM package_products pp JOIN products pr ON pp.product_id=pr.id WHERE pp.package_id=? AND pp.is_active=1 AND pr.is_active=1', [p.id]);
-      result.push({
-        ...p,
-        product_count: pCnt[0].cnt,
-        is_unlocked: isUnlocked,
-        is_current: user[0].active_package_id === p.id,
-        locked_amount: parseFloat(user[0].locked_amount || 0),
-        progress: progress ? {
-          completed_orders: progress.completed_orders,
-          total_spent: progress.total_spent,
-          status: progress.status
-        } : null
-      });
-    }
+    // Single query: packages + product counts + user progress
+    const [packages] = await pool.query(
+      `SELECT p.*,
+        COUNT(DISTINCT pp.product_id) as product_count,
+        upp.completed_orders as prog_completed, upp.total_spent as prog_spent, upp.status as prog_status
+       FROM packages p
+       LEFT JOIN package_products pp ON p.id = pp.package_id AND pp.is_active=1
+       LEFT JOIN products pr ON pp.product_id = pr.id AND pr.is_active=1
+       LEFT JOIN user_package_progress upp ON upp.package_id = p.id AND upp.user_id = ?
+       WHERE p.is_active=1
+       GROUP BY p.id ORDER BY p.tier_level ASC`, [req.user.id]
+    );
+
+    const result = packages.map(p => ({
+      ...p,
+      is_unlocked: parseFloat(user[0].total_deposit) >= parseFloat(p.min_deposit),
+      is_current: user[0].active_package_id === p.id,
+      locked_amount: parseFloat(user[0].locked_amount || 0),
+      progress: p.prog_status ? {
+        completed_orders: p.prog_completed,
+        total_spent: p.prog_spent,
+        status: p.prog_status
+      } : null
+    }));
     res.json(success(result));
   } catch(e) { res.status(500).json(fail('Lỗi server')); }
 });
@@ -324,15 +349,16 @@ app.post('/api/user/select-package', authMiddleware, async (req, res) => {
 app.get('/api/user/orders', authMiddleware, async (req, res) => {
   try {
     const { status, page = 1, limit = 20 } = req.query;
+    const safeLimit = capLimit(limit);
     let query = 'SELECT * FROM orders WHERE user_id=?';
     const params = [req.user.id];
     if (status && status !== 'all') { query += ' AND status=?'; params.push(status); }
     query += ' ORDER BY created_at DESC LIMIT ? OFFSET ?';
-    params.push(parseInt(limit), (parseInt(page)-1)*parseInt(limit));
+    params.push(safeLimit, (parseInt(page)-1)*safeLimit);
     const [orders] = await pool.query(query, params);
     const [countQ] = await pool.query('SELECT COUNT(*) as total FROM orders WHERE user_id=?' + (status && status!=='all' ? ' AND status=?' : ''),
       status && status!=='all' ? [req.user.id, status] : [req.user.id]);
-    res.json(success({ orders, total: countQ[0].total, page: parseInt(page), limit: parseInt(limit) }));
+    res.json(success({ orders, total: countQ[0].total, page: parseInt(page), limit: safeLimit }));
   } catch(e) { res.status(500).json(fail('Lỗi server')); }
 });
 
@@ -579,9 +605,19 @@ app.post('/api/user/reset-test', authMiddleware, (req, res, next) => {
 // User: tạo lệnh rút tiền
 app.post('/api/user/withdraw', authMiddleware, async (req, res) => {
   try {
-    const { method, bank_name, account_number, beneficiary_name, momo_phone, amount } = req.body;
+    const { method, bank_name, account_number, beneficiary_name, momo_phone, amount, amount_vnd } = req.body;
     if (!method || !['bank','momo'].includes(method)) return res.status(400).json(fail('Phương thức không hợp lệ'));
-    const withdrawAmount = parseFloat(amount);
+
+    // Support both $ and VNĐ input — always store as $
+    let withdrawAmount;
+    if (amount_vnd && !amount) {
+      // VNĐ input — convert to $
+      const [rateRows] = await pool.query("SELECT setting_value FROM settings WHERE setting_key='exchange_rate'");
+      const rate = rateRows.length > 0 ? parseFloat(rateRows[0].setting_value) : 27000;
+      withdrawAmount = parseFloat(amount_vnd) / rate;
+    } else {
+      withdrawAmount = parseFloat(amount);
+    }
     if (!withdrawAmount || withdrawAmount <= 0) return res.status(400).json(fail('Số tiền phải lớn hơn 0'));
 
     // Validate required fields per method
@@ -618,9 +654,10 @@ app.post('/api/user/withdraw', authMiddleware, async (req, res) => {
 app.get('/api/user/withdrawals', authMiddleware, async (req, res) => {
   try {
     const { page = 1, limit = 20 } = req.query;
+    const safeLimit = capLimit(limit);
     const [rows] = await pool.query(
       'SELECT * FROM withdrawals WHERE user_id=? ORDER BY created_at DESC LIMIT ? OFFSET ?',
-      [req.user.id, parseInt(limit), (parseInt(page)-1)*parseInt(limit)]
+      [req.user.id, safeLimit, (parseInt(page)-1)*safeLimit]
     );
     const [cnt] = await pool.query('SELECT COUNT(*) as total FROM withdrawals WHERE user_id=?', [req.user.id]);
     res.json(success({ withdrawals: rows, total: cnt[0].total }));
@@ -641,11 +678,12 @@ app.post('/api/user/withdrawals/:id/cancel', authMiddleware, async (req, res) =>
 app.get('/api/user/transactions', authMiddleware, async (req, res) => {
   try {
     const { type, page = 1, limit = 20 } = req.query;
+    const safeLimit = capLimit(limit);
     let query = 'SELECT * FROM transactions WHERE user_id=?';
     const params = [req.user.id];
     if (type) { query += ' AND type=?'; params.push(type); }
     query += ' ORDER BY created_at DESC LIMIT ? OFFSET ?';
-    params.push(parseInt(limit), (parseInt(page)-1)*parseInt(limit));
+    params.push(safeLimit, (parseInt(page)-1)*safeLimit);
     const [txns] = await pool.query(query, params);
     const [cnt] = await pool.query('SELECT COUNT(*) as total FROM transactions WHERE user_id=?' + (type ? ' AND type=?' : ''), type ? [req.user.id, type] : [req.user.id]);
     res.json(success({ transactions: txns, total: cnt[0].total }));
@@ -654,51 +692,47 @@ app.get('/api/user/transactions', authMiddleware, async (req, res) => {
 
 app.get('/api/user/stats', authMiddleware, async (req, res) => {
   try {
-    const [todayStats] = await pool.query(
-      `SELECT COUNT(*) as orders, COALESCE(SUM(commission_amount),0) as commission
-       FROM orders WHERE user_id=? AND DATE(created_at)=CURDATE()`, [req.user.id]);
-    const [totalStats] = await pool.query(
-      `SELECT COUNT(*) as orders, COALESCE(SUM(commission_amount),0) as commission
-       FROM orders WHERE user_id=? AND status='completed'`, [req.user.id]);
-    const [user] = await pool.query('SELECT active_package_id, daily_spins_today, daily_spins_date, balance, locked_amount FROM users WHERE id=?', [req.user.id]);
+    // Parallel independent queries
+    const [todayStats, totalStats, user, vip] = await Promise.all([
+      pool.query(`SELECT COUNT(*) as orders, COALESCE(SUM(commission_amount),0) as commission FROM orders WHERE user_id=? AND DATE(created_at)=CURDATE()`, [req.user.id]),
+      pool.query(`SELECT COUNT(*) as orders, COALESCE(SUM(commission_amount),0) as commission FROM orders WHERE user_id=? AND status='completed'`, [req.user.id]),
+      pool.query('SELECT active_package_id, daily_spins_today, daily_spins_date, balance, locked_amount FROM users WHERE id=?', [req.user.id]),
+      pool.query('SELECT MAX(p.tier_level) as max_tier FROM user_package_progress upp JOIN packages p ON upp.package_id=p.id WHERE upp.user_id=? AND upp.status="completed"', [req.user.id])
+    ]);
 
     let dailyLimit = 0, dailyRemaining = 0, packageName = '', completedInPkg = 0, totalInPkg = 0, pkgCompleted = false;
-    if (user[0].active_package_id) {
-      const [pkg] = await pool.query('SELECT name, daily_order_limit, max_orders FROM packages WHERE id=?', [user[0].active_package_id]);
-      if (pkg.length > 0) {
-        dailyLimit = pkg[0].daily_order_limit;
-        packageName = pkg[0].name;
-        totalInPkg = pkg[0].max_orders;
-        const [[mysqlToday3]] = await pool.query('SELECT CURDATE() as today');
-        const todayMySQL3 = mysqlToday3.today instanceof Date ? mysqlToday3.today.toISOString().slice(0,10) : String(mysqlToday3.today);
-        const dailyUsed = user[0].daily_spins_date === todayMySQL3 ? user[0].daily_spins_today : 0;
+    if (user[0][0].active_package_id) {
+      const [[pkg]] = await pool.query('SELECT name, daily_order_limit, max_orders FROM packages WHERE id=?', [user[0][0].active_package_id]);
+      if (pkg) {
+        dailyLimit = pkg.daily_order_limit;
+        packageName = pkg.name;
+        totalInPkg = pkg.max_orders;
+        const dailyUsed = user[0][0].daily_spins_date === new Date().toISOString().slice(0,10) ? user[0][0].daily_spins_today : 0;
         dailyRemaining = dailyLimit - dailyUsed;
-        const [prog] = await pool.query('SELECT completed_orders, status FROM user_package_progress WHERE user_id=? AND package_id=? AND status="active"', [req.user.id, user[0].active_package_id]);
+        const [prog] = await pool.query('SELECT completed_orders, status FROM user_package_progress WHERE user_id=? AND package_id=? AND status="active"', [req.user.id, user[0][0].active_package_id]);
         if (prog.length > 0) {
           completedInPkg = prog[0].completed_orders;
-          pkgCompleted = prog[0].completed_orders >= pkg[0].max_orders;
+          pkgCompleted = prog[0].completed_orders >= pkg.max_orders;
         }
       }
     }
 
-    // Highest VIP tier reached
-    const [vip] = await pool.query('SELECT MAX(p.tier_level) as max_tier FROM user_package_progress upp JOIN packages p ON upp.package_id=p.id WHERE upp.user_id=? AND upp.status="completed"', [req.user.id]);
-
+    const u = user[0][0];
     res.json(success({
-      today_orders: todayStats[0].orders,
-      today_commission: todayStats[0].commission,
-      total_orders: totalStats[0].orders,
-      total_commission: totalStats[0].commission,
+      today_orders: todayStats[0][0].orders,
+      today_commission: todayStats[0][0].commission,
+      total_orders: totalStats[0][0].orders,
+      total_commission: totalStats[0][0].commission,
       daily_limit: dailyLimit,
       daily_remaining: dailyRemaining,
       active_package: packageName,
       completed_in_package: completedInPkg,
       total_in_package: totalInPkg,
       package_completed: pkgCompleted,
-      highest_vip: vip[0].max_tier || 0,
-      balance: parseFloat(user[0].balance || 0),
-      locked_amount: parseFloat(user[0].locked_amount || 0),
-      available_balance: Math.max(0, parseFloat(user[0].balance || 0) - parseFloat(user[0].locked_amount || 0))
+      highest_vip: vip[0][0].max_tier || 0,
+      balance: parseFloat(u.balance || 0),
+      locked_amount: parseFloat(u.locked_amount || 0),
+      available_balance: Math.max(0, parseFloat(u.balance || 0) - parseFloat(u.locked_amount || 0))
     }));
   } catch(e) { console.error('[STATS]', e.message); res.status(500).json(fail('Lỗi server')); }
 });
@@ -720,21 +754,27 @@ app.get('/api/user/chat', authMiddleware, async (req, res) => {
 // ==================== ADMIN ROUTES ====================
 app.get('/api/admin/stats', authMiddleware, adminMiddleware, async (req, res) => {
   try {
-    const [users] = await pool.query('SELECT COUNT(*) as cnt FROM users WHERE role="user"');
-    const [orders] = await pool.query('SELECT COUNT(*) as cnt FROM orders');
-    const [completedOrders] = await pool.query('SELECT COUNT(*) as cnt, COALESCE(SUM(commission_amount),0) as comm FROM orders WHERE status="completed"');
-    const [totalDeposit] = await pool.query('SELECT COALESCE(SUM(amount),0) as total FROM transactions WHERE type="deposit" AND status="completed"');
-    const [packages] = await pool.query('SELECT COUNT(*) as cnt FROM packages WHERE is_active=1');
-    const [todayOrders] = await pool.query('SELECT COUNT(*) as cnt FROM orders WHERE DATE(created_at)=CURDATE()');
-    const [todayCommission] = await pool.query('SELECT COALESCE(SUM(commission_amount),0) as total FROM orders WHERE status="completed" AND DATE(completed_at)=CURDATE()');
-    const [pendingOrders] = await pool.query('SELECT COUNT(*) as cnt FROM orders WHERE status="pending"');
-    res.json(success({
+    const cached = cacheGet('admin_stats');
+    if (cached) return res.json(success(cached));
+    const [[users],[orders],[completedOrders],[totalDeposit],[packages],[todayOrders],[todayCommission],[pendingOrders]] = await Promise.all([
+      pool.query('SELECT COUNT(*) as cnt FROM users WHERE role="user"'),
+      pool.query('SELECT COUNT(*) as cnt FROM orders'),
+      pool.query('SELECT COUNT(*) as cnt, COALESCE(SUM(commission_amount),0) as comm FROM orders WHERE status="completed"'),
+      pool.query('SELECT COALESCE(SUM(amount),0) as total FROM transactions WHERE type="deposit" AND status="completed"'),
+      pool.query('SELECT COUNT(*) as cnt FROM packages WHERE is_active=1'),
+      pool.query('SELECT COUNT(*) as cnt FROM orders WHERE DATE(created_at)=CURDATE()'),
+      pool.query('SELECT COALESCE(SUM(commission_amount),0) as total FROM orders WHERE status="completed" AND DATE(completed_at)=CURDATE()'),
+      pool.query('SELECT COUNT(*) as cnt FROM orders WHERE status="pending"')
+    ]);
+    const result = {
       total_users: users[0].cnt, total_orders: orders[0].cnt,
       completed_orders: completedOrders[0].cnt, total_commission: completedOrders[0].comm,
       total_deposits: totalDeposit[0].total, active_packages: packages[0].cnt,
       today_orders: todayOrders[0].cnt, today_commission: todayCommission[0].total,
       pending_orders: pendingOrders[0].cnt
-    }));
+    };
+    cacheSet('admin_stats', result, 15000);
+    res.json(success(result));
   } catch(e) { res.status(500).json(fail('Lỗi server')); }
 });
 
@@ -863,11 +903,12 @@ app.get('/api/admin/users/:id/orders', authMiddleware, adminMiddleware, async (r
 app.get('/api/admin/users', authMiddleware, adminMiddleware, async (req, res) => {
   try {
     const { search, page = 1, limit = 20 } = req.query;
+    const safeLimit = capLimit(limit);
     let query = `SELECT u.*, p.name as package_name FROM users u LEFT JOIN packages p ON u.active_package_id=p.id WHERE u.role='user'`;
     const params = [];
     if (search) { query += ' AND (u.username LIKE ? OR u.email LIKE ? OR u.full_name LIKE ?)'; const s = '%'+sanitize(search)+'%'; params.push(s,s,s); }
     query += ' ORDER BY u.created_at DESC LIMIT ? OFFSET ?';
-    params.push(parseInt(limit), (parseInt(page)-1)*parseInt(limit));
+    params.push(safeLimit, (parseInt(page)-1)*safeLimit);
     const [users] = await pool.query(query, params);
     const [cnt] = await pool.query('SELECT COUNT(*) as total FROM users WHERE role="user"' + (search ? ' AND (username LIKE ? OR email LIKE ? OR full_name LIKE ?)' : ''),
       search ? ['%'+sanitize(search)+'%','%'+sanitize(search)+'%','%'+sanitize(search)+'%'] : []);
@@ -880,7 +921,7 @@ app.post('/api/admin/users', authMiddleware, adminMiddleware, async (req, res) =
   try {
     const { username, email, full_name, phone, password, balance } = req.body;
     if (!username || !email || !password) return res.status(400).json(fail('Thiếu thông tin bắt buộc'));
-    const hash = await bcrypt.hash(password, 12);
+    const hash = await bcrypt.hash(password, 10);
     const [result] = await pool.query(
       `INSERT INTO users (username,email,password_hash,full_name,phone,role,ref_code,balance,total_deposit,is_active) VALUES (?,?,?,?,?,'user',?,?,?,?,1)`,
       [sanitize(username), sanitize(email), hash, sanitize(full_name||''), sanitize(phone||''), 'DIOR'+Math.random().toString(36).substring(2,8).toUpperCase(), parseFloat(balance)||0, parseFloat(balance)||0]
@@ -942,13 +983,16 @@ app.put('/api/admin/users/:id', authMiddleware, adminMiddleware, async (req, res
 // Admin Packages CRUD
 app.get('/api/admin/packages', authMiddleware, adminMiddleware, async (req, res) => {
   try {
-    const [pkgs] = await pool.query('SELECT * FROM packages ORDER BY tier_level ASC');
-    for (let p of pkgs) {
-      const [cnt] = await pool.query('SELECT COUNT(*) as cnt FROM package_products pp JOIN products pr ON pp.product_id=pr.id WHERE pp.package_id=? AND pp.is_active=1 AND pr.is_active=1', [p.id]);
-      const [ucnt] = await pool.query('SELECT COUNT(*) as cnt FROM users WHERE active_package_id=?', [p.id]);
-      p.product_count = cnt[0].cnt;
-      p.user_count = ucnt[0].cnt;
-    }
+    const [pkgs] = await pool.query(
+      `SELECT p.*,
+        COUNT(DISTINCT pp.product_id) as product_count,
+        COUNT(DISTINCT u.id) as user_count
+       FROM packages p
+       LEFT JOIN package_products pp ON p.id = pp.package_id AND pp.is_active=1
+       LEFT JOIN products pr ON pp.product_id = pr.id AND pr.is_active=1
+       LEFT JOIN users u ON u.active_package_id = p.id
+       GROUP BY p.id ORDER BY p.tier_level ASC`
+    );
     res.json(success(pkgs));
   } catch(e) { res.status(500).json(fail('Lỗi server')); }
 });
@@ -1125,6 +1169,7 @@ app.post('/api/admin/products/assign-batch', authMiddleware, adminMiddleware, as
 app.get('/api/admin/orders', authMiddleware, adminMiddleware, async (req, res) => {
   try {
     const { status, user_id, page = 1, limit = 20 } = req.query;
+    const safeLimit = capLimit(limit);
     let query = `SELECT o.*, u.username FROM orders o JOIN users u ON o.user_id=u.id`;
     const conditions = [];
     const params = [];
@@ -1132,7 +1177,7 @@ app.get('/api/admin/orders', authMiddleware, adminMiddleware, async (req, res) =
     if (user_id) { conditions.push('o.user_id=?'); params.push(user_id); }
     if (conditions.length) query += ' WHERE ' + conditions.join(' AND ');
     query += ' ORDER BY o.created_at DESC LIMIT ? OFFSET ?';
-    params.push(parseInt(limit), (parseInt(page)-1)*parseInt(limit));
+    params.push(safeLimit, (parseInt(page)-1)*safeLimit);
     const [orders] = await pool.query(query, params);
     const cntQuery = `SELECT COUNT(*) as total FROM orders o ${conditions.length ? 'WHERE '+conditions.join(' AND ') : ''}`;
     const [cnt] = await pool.query(cntQuery, params.slice(0, conditions.length));
@@ -1153,6 +1198,7 @@ app.put('/api/admin/orders/:id/status', authMiddleware, adminMiddleware, async (
 app.get('/api/admin/transactions', authMiddleware, adminMiddleware, async (req, res) => {
   try {
     const { type, user_id, page = 1, limit = 20 } = req.query;
+    const safeLimit = capLimit(limit);
     let query = `SELECT t.*, u.username FROM transactions t JOIN users u ON t.user_id=u.id`;
     const conditions = [];
     const params = [];
@@ -1160,7 +1206,7 @@ app.get('/api/admin/transactions', authMiddleware, adminMiddleware, async (req, 
     if (user_id) { conditions.push('t.user_id=?'); params.push(user_id); }
     if (conditions.length) query += ' WHERE ' + conditions.join(' AND ');
     query += ' ORDER BY t.created_at DESC LIMIT ? OFFSET ?';
-    params.push(parseInt(limit), (parseInt(page)-1)*parseInt(limit));
+    params.push(safeLimit, (parseInt(page)-1)*safeLimit);
     const [txns] = await pool.query(query, params);
     const cntQuery = `SELECT COUNT(*) as total FROM transactions t ${conditions.length ? 'WHERE '+conditions.join(' AND ') : ''}`;
     const [cnt] = await pool.query(cntQuery, params.slice(0, conditions.length));
@@ -1172,11 +1218,12 @@ app.get('/api/admin/transactions', authMiddleware, adminMiddleware, async (req, 
 app.get('/api/admin/chat', authMiddleware, adminMiddleware, async (req, res) => {
   try {
     const { user_id, page = 1, limit = 50 } = req.query;
+    const safeLimit = capLimit(limit, 100);
     let query = `SELECT cm.*, u.username FROM chat_messages cm JOIN users u ON cm.user_id=u.id`;
     const params = [];
     if (user_id) { query += ' WHERE cm.user_id=?'; params.push(user_id); }
     query += ' ORDER BY cm.created_at DESC LIMIT ? OFFSET ?';
-    params.push(parseInt(limit), (parseInt(page)-1)*parseInt(limit));
+    params.push(safeLimit, (parseInt(page)-1)*safeLimit);
     const [msgs] = await pool.query(query, params);
     res.json(success(msgs));
   } catch(e) { res.status(500).json(fail('Lỗi server')); }
@@ -1224,18 +1271,19 @@ app.put('/api/admin/settings', authMiddleware, adminMiddleware, async (req, res)
 
 // ==================== STATIC FILES ====================
 const publicDir = path.join(__dirname, 'public');
-app.use(express.static(publicDir));
+app.use(express.static(publicDir, { maxAge: '1d', etag: true }));
 // ==================== ADMIN WITHDRAWAL MANAGEMENT ====================
 
 // Admin: danh sách lệnh rút
 app.get('/api/admin/withdrawals', authMiddleware, adminMiddleware, async (req, res) => {
   try {
     const { status, page = 1, limit = 50 } = req.query;
+    const safeLimit = capLimit(limit, 100);
     let query = 'SELECT w.*, u.username, u.email, u.full_name FROM withdrawals w JOIN users u ON w.user_id=u.id';
     const params = [];
     if (status) { query += ' WHERE w.status=?'; params.push(status); }
     query += ' ORDER BY w.created_at DESC LIMIT ? OFFSET ?';
-    params.push(parseInt(limit), (parseInt(page)-1)*parseInt(limit));
+    params.push(safeLimit, (parseInt(page)-1)*safeLimit);
     const [rows] = await pool.query(query, params);
     const countQ = 'SELECT COUNT(*) as total FROM withdrawals' + (status ? ' WHERE status=?' : '');
     const [cnt] = await pool.query(countQ, status ? [status] : []);
@@ -1297,16 +1345,35 @@ app.put('/api/admin/withdrawals/:id/status', authMiddleware, adminMiddleware, as
   } catch(e) { res.status(500).json(fail('Lỗi server: ' + e.message)); }
 });
 
-app.use('/admin', express.static(path.join(publicDir, 'admin')));
+app.use('/admin', express.static(path.join(publicDir, 'admin'), { maxAge: '1h', etag: true }));
 
-app.get('/', (req, res) => res.sendFile(path.join(publicDir, '..', '..', 'dior-fashion.html')));
-app.get('/login', (req, res) => res.sendFile(path.join(publicDir, '..', '..', 'dior-login.html')));
-app.get('/register', (req, res) => res.sendFile(path.join(publicDir, '..', '..', 'dior-register.html')));
-app.get('/app', (req, res) => res.sendFile(path.join(publicDir, '..', '..', 'dior-platform.html')));
+app.get('/', (req, res) => res.sendFile(path.join(publicDir, '..', '..', 'dior-fashion.html'), { maxAge: '1h' }));
+app.get('/login', (req, res) => res.sendFile(path.join(publicDir, '..', '..', 'dior-login.html'), { maxAge: '1h' }));
+app.get('/register', (req, res) => res.sendFile(path.join(publicDir, '..', '..', 'dior-register.html'), { maxAge: '1h' }));
+app.get('/app', (req, res) => res.sendFile(path.join(publicDir, '..', '..', 'dior-platform.html'), { maxAge: '1h' }));
 
 // ==================== WEBSOCKET CHAT ====================
 const wss = new WebSocketServer({ server, path: '/ws/chat' });
 const wsClients = new Map();
+// Cache admin IDs (rarely change)
+let cachedAdminIds = null;
+async function getAdminIds() {
+  if (!cachedAdminIds || Date.now() - cachedAdminIds.ts > 300000) {
+    const [admins] = await pool.query('SELECT id FROM users WHERE role="admin"');
+    cachedAdminIds = { ids: admins.map(a => a.id), ts: Date.now() };
+  }
+  return cachedAdminIds.ids;
+}
+
+// WebSocket heartbeat (ping every 30s, terminate stale connections)
+const wsHeartbeat = setInterval(() => {
+  wss.clients.forEach(ws => {
+    if (ws.isAlive === false) return ws.terminate();
+    ws.isAlive = false;
+    ws.ping();
+  });
+}, 30000);
+wss.on('close', () => clearInterval(wsHeartbeat));
 
 function broadcastToUser(userId, data) {
   const clients = wsClients.get(userId);
@@ -1319,6 +1386,8 @@ function broadcastToUser(userId, data) {
 wss.on('connection', (ws, req) => {
   let userId = null;
   let userRole = null;
+  ws.isAlive = true;
+  ws.on('pong', () => { ws.isAlive = true; });
 
   ws.on('message', async (raw) => {
     try {
@@ -1346,10 +1415,10 @@ wss.on('connection', (ws, req) => {
         await pool.query('INSERT INTO chat_messages (user_id, sender, message) VALUES (?,\'user\',?)', [userId, clean]);
         // Send confirmation back to sender ONLY (not broadcast to avoid duplicates)
         ws.send(JSON.stringify({ type: 'chat_sent', sender: 'user', message: clean, time: new Date().toISOString() }));
-        // Forward to all admins
-        const [admins] = await pool.query('SELECT id FROM users WHERE role="admin"');
-        for (const admin of admins) {
-          broadcastToUser(admin.id, { type: 'chat_msg', user_id: userId, sender: 'user', message: clean, time: new Date().toISOString() });
+        // Forward to all admins (cached)
+        const adminIds = await getAdminIds();
+        for (const adminId of adminIds) {
+          broadcastToUser(adminId, { type: 'chat_msg', user_id: userId, sender: 'user', message: clean, time: new Date().toISOString() });
         }
       }
 

@@ -642,15 +642,18 @@ function initApp() {
   document.querySelector('.bnav-item').classList.add('active');
   showPage('home', document.querySelector('.bnav-item'));
   connectWS();
-  /* Tự động refresh user data mỗi 30s để luôn có số dư mới nhất */
+  /* Balance refresh: use WebSocket push when available, fallback to polling every 60s */
   setInterval(async () => {
     const meData = await apiGet('/auth/me');
     if (meData) {
       USER = meData.data;
       USER.locked_amount = parseFloat(meData.data.locked_amount || 0);
       USER.balance = parseFloat(meData.data.balance || 0);
+      /* Update balance display if on home page */
+      const balEl = document.querySelector('.bal-amount');
+      if (balEl && currentPage === 'home') balEl.textContent = fmtMoney(Math.max(0, parseFloat(USER.balance||0) - parseFloat(USER.locked_amount||0)));
     }
-  }, 30000);
+  }, 60000);
 }
 
 // ===== NAVIGATION =====
@@ -723,10 +726,9 @@ function buildFashionGrid() {
 }
 
 async function renderHome() {
-  const statsData = await apiGet('/user/stats');
+  const [statsData, pkgsData] = await Promise.all([apiGet('/user/stats'), apiGet('/user/packages')]);
   if (!statsData) return;
   const s = statsData.data;
-  const pkgsData = await apiGet('/user/packages');
   const pkgs = pkgsData?.data || [];
   const vipNames = ['','Bạc','Vàng','Bạch Kim','Kim Cương'];
   const vipIcons = ['','\u{1F949}','\u{1F948}','\u{1F48E}','\u{1F48D}'];
@@ -839,7 +841,19 @@ async function openWithdrawModal() {
   h += '<label style="flex:1;display:flex;align-items:center;gap:8px;padding:10px 14px;border:2px solid var(--border);border-radius:8px;cursor:pointer;transition:all .2s" id="wdMomoLabel" onclick="selectWithdrawMethod(\'momo\')"><input type="radio" name="wdMethod" value="momo" style="display:none"><svg viewBox="0 0 24 24" width="20" height="20" style="stroke:var(--gold);fill:none;stroke-width:2"><rect x="5" y="2" width="14" height="20" rx="2" ry="2"/><line x1="12" y1="18" x2="12.01" y2="18"/></svg><span style="font-size:13px;font-weight:500">MoMo</span></label>';
   h += '</div></div>';
   h += '<div id="wdFields"></div>';
-  h += '<div class="fg" style="margin-top:12px"><label>Số tiền rút (USD)</label><input id="withdrawAmount" type="number" min="1" max="' + avail + '" placeholder="Tối đa ' + avail.toFixed(2) + ' USD"></div>';
+  /* Currency toggle: USD or VNĐ */
+  const rate = EXCHANGE_RATE || 27000;
+  const availVND = Math.round(avail * rate);
+  h += '<div class="fg" style="margin-top:12px"><label>Số tiền rút</label>';
+  h += '<div style="display:flex;gap:0;border:1px solid var(--border);border-radius:8px;overflow:hidden;margin-bottom:8px">';
+  h += '<button id="wdCurrUSD" onclick="setWithdrawCurrency(\'USD\')" style="flex:1;padding:8px;border:none;background:var(--gold);color:#fff;font-weight:600;font-size:13px;cursor:pointer">USD ($)</button>';
+  h += '<button id="wdCurrVND" onclick="setWithdrawCurrency(\'VND\')" style="flex:1;padding:8px;border:none;background:transparent;color:var(--gray);font-weight:500;font-size:13px;cursor:pointer">VNĐ (₫)</button>';
+  h += '</div>';
+  h += '<div style="position:relative"><input id="withdrawAmount" type="number" min="1" placeholder="Nhập số tiền" oninput="convertWithdrawAmount()" style="padding-right:60px">';
+  h += '<span id="wdCurrSymbol" style="position:absolute;right:12px;top:50%;transform:translateY(-50%);font-size:12px;color:var(--gray)">$</span></div>';
+  h += '<div id="wdConvertHint" style="font-size:11px;color:var(--gray);margin-top:4px">Tối đa: $' + avail.toFixed(2) + ' (₫' + availVND.toLocaleString('vi') + ')</div>';
+  h += '<input type="hidden" id="withdrawCurrency" value="USD">';
+  h += '</div>';
   h += '<div class="btn-row"><button class="btn btn-s" onclick="closeModal()">Hủy</button><button class="btn btn-gold" onclick="submitWithdraw()">Gửi yêu cầu</button></div>';
   openModal(h);
   selectWithdrawMethod('bank');
@@ -858,15 +872,56 @@ function selectWithdrawMethod(method) {
   }
 }
 
+/* ===== Withdraw VNĐ/USD currency toggle ===== */
+let _wdCurrency = 'USD';
+function setWithdrawCurrency(curr) {
+  _wdCurrency = curr;
+  document.getElementById('withdrawCurrency').value = curr;
+  document.getElementById('wdCurrUSD').style.background = curr === 'USD' ? 'var(--gold)' : 'transparent';
+  document.getElementById('wdCurrUSD').style.color = curr === 'USD' ? '#fff' : 'var(--gray)';
+  document.getElementById('wdCurrVND').style.background = curr === 'VND' ? 'var(--gold)' : 'transparent';
+  document.getElementById('wdCurrVND').style.color = curr === 'VND' ? '#fff' : 'var(--gray)';
+  document.getElementById('wdCurrSymbol').textContent = curr === 'USD' ? '$' : '₫';
+  document.getElementById('withdrawAmount').value = '';
+  convertWithdrawAmount();
+}
+function convertWithdrawAmount() {
+  const rate = EXCHANGE_RATE || 27000;
+  const avail = Math.max(0, parseFloat(USER?.balance||0) - parseFloat(USER?.locked_amount||0));
+  const val = parseFloat(document.getElementById('withdrawAmount')?.value) || 0;
+  const hint = document.getElementById('wdConvertHint');
+  if (_wdCurrency === 'USD') {
+    const vnd = Math.round(val * rate);
+    hint.textContent = val > 0 ? '= ₫' + vnd.toLocaleString('vi') : 'Tối đa: $' + avail.toFixed(2) + ' (₫' + Math.round(avail*rate).toLocaleString('vi') + ')';
+  } else {
+    const usd = val / rate;
+    hint.textContent = val > 0 ? '= $' + usd.toFixed(2) : 'Tối đa: ₫' + Math.round(avail*rate).toLocaleString('vi') + ' ($' + avail.toFixed(2) + ')';
+  }
+}
+
 async function submitWithdraw() {
   const method = document.querySelector('input[name="wdMethod"]:checked')?.value;
   const amt = parseFloat(document.getElementById('withdrawAmount')?.value);
+  const curr = document.getElementById('withdrawCurrency')?.value || 'USD';
+  const rate = EXCHANGE_RATE || 27000;
   const avail = Math.max(0, parseFloat(USER?.balance||0) - parseFloat(USER?.locked_amount||0));
   if (!method) { toast('Chọn phương thức rút tiền', 'err'); return; }
   if (!amt || amt <= 0) { toast('Nhập số tiền rút', 'err'); return; }
-  if (amt > avail) { toast('Số dư không đủ (khả dụng: ' + fmtMoney(avail) + ')', 'err'); return; }
 
-  const body = { method, amount: amt };
+  // Validate against available balance in correct currency
+  if (curr === 'VND') {
+    const availVND = Math.round(avail * rate);
+    if (amt > availVND) { toast('Số dư không đủ (khả dụng: ₫' + availVND.toLocaleString('vi') + ')', 'err'); return; }
+  } else {
+    if (amt > avail) { toast('Số dư không đủ (khả dụng: $' + avail.toFixed(2) + ')', 'err'); return; }
+  }
+
+  const body = { method };
+  if (curr === 'VND') {
+    body.amount_vnd = amt;
+  } else {
+    body.amount = amt;
+  }
   if (method === 'bank') {
     body.bank_name = document.getElementById('wdBankName')?.value?.trim();
     body.account_number = document.getElementById('wdAccountNum')?.value?.trim();
@@ -1062,7 +1117,10 @@ async function renderSpin() {
   /* Stats if has active package */
   lastStats = null;
   if (hasActive) {
-    const statsData = await apiGet('/user/stats');
+    const [statsData, ordersData] = await Promise.all([
+      apiGet('/user/stats'),
+      apiGet('/user/orders?limit=50&status=pending')
+    ]);
     lastStats = statsData?.data || null;
     const stats = lastStats || {};
     html += '<div id="spinStatsWrap"><div class="spin-stats">';
@@ -1072,7 +1130,6 @@ async function renderSpin() {
     html += '</div></div>';  /* close spin-stats + spinStatsWrap */
 
     /* Kiểm tra đơn chưa phân phối */
-    const ordersData = await apiGet('/user/orders?limit=50&status=pending');
     const pendingOrders = (ordersData?.data?.orders || []).filter(o => o.status === 'pending');
     if (pendingOrders.length > 0) {
       const po = pendingOrders[0];
@@ -1288,7 +1345,7 @@ async function doDistribute() {
     '<div style="font-size:11px;color:var(--light-gray)">' + lastSpinResult._prod.name + '</div>';
 
   /* Commit financial/progress changes only after distribution succeeds */
-  await new Promise(resolve => setTimeout(resolve, 2000));
+  await new Promise(resolve => setTimeout(resolve, 1000));
   const distribution = await apiPost('/orders/' + lastSpinResult.order_id + '/distribute');
   if (!distribution) { spinState = 'result'; return; }
   lastSpinResult = Object.assign(lastSpinResult, distribution.data);
@@ -1397,15 +1454,17 @@ function sendChat() {
 
 // ===== PROFILE / CỦA TÔI =====
 async function renderProfile() {
-  const meData = await apiGet('/auth/me');
+  const [meData, statsData, txData] = await Promise.all([
+    apiGet('/auth/me'),
+    apiGet('/user/stats'),
+    apiGet('/user/transactions?limit=10')
+  ]);
   if (meData) USER = meData.data;
-  const statsData = await apiGet('/user/stats');
   const stats = statsData?.data || {};
   const vipNames = ['','Bạc','Vàng','Bạch Kim','Kim Cương'];
   const vipLevel = stats.highest_vip || 0;
-  const txData = await apiGet('/user/transactions?limit=10');
   const txns = txData?.data?.transactions || [];
-  const typeLabels = { deposit:'Nạp tiền', withdraw:'Rút tiền', order_deduct:'Trừ đơn', order_refund:'Hoàn tiền', commission:'Hoa hồng', admin_adjust:'Admin', referral_bonus:'Giới thiệu' };
+  const typeLabels = { deposit:'Nạp tiền', withdraw:'Rút tiền', order_deduct:'Trừ đơn', order_refund:'Hoàn tiền', commission:'Hoa hồng', admin_adjust:'Admin', referral_bonus:'Giới thiệu', unlock:'Giải phóng khóa', lock_topup:'Khóa tiền', order_lock:'Khóa đơn' };
   const initials = (USER?.full_name || USER?.username || 'U').split(' ').map(w=>w[0]).join('').substring(0,2).toUpperCase();
 
   let html = '<div class="profile-header"><div class="profile-avatar">' + initials + '</div><div class="profile-info"><div class="name">' + (USER?.full_name || USER?.username || '') + '</div><div class="email">' + (USER?.email || '') + '</div><div class="profile-meta"><span>Số dư: <b>' + fmtMoney(Math.max(0, parseFloat(USER?.balance||0))) + '</b></span><span>Tổng nạp: <b>' + fmtMoney(USER?.total_deposit||0) + '</b></span>' + (vipLevel > 0 ? '<span style="font-size:10px;padding:2px 10px;background:linear-gradient(135deg,#c9a96e,#b8944f);color:#fff;border-radius:12px">VIP ' + vipNames[vipLevel] + '</span>' : '') + '</div></div></div>';
@@ -1478,7 +1537,7 @@ function showProfileSection(section) {
 async function renderProfileTransactions() {
   const txData = await apiGet('/user/transactions?limit=10');
   const txns = txData?.data?.transactions || [];
-  const typeLabels = { deposit:'Nạp tiền', withdraw:'Rút tiền', order_deduct:'Trừ đơn', order_refund:'Hoàn tiền', commission:'Hoa hồng', admin_adjust:'Admin', referral_bonus:'Giới thiệu' };
+  const typeLabels = { deposit:'Nạp tiền', withdraw:'Rút tiền', order_deduct:'Trừ đơn', order_refund:'Hoàn tiền', commission:'Hoa hồng', admin_adjust:'Admin', referral_bonus:'Giới thiệu', unlock:'Giải phóng khóa', lock_topup:'Khóa tiền', order_lock:'Khóa đơn' };
   const detail = document.getElementById('profileDetail');
   if (!detail) return;
   let h = '<div class="profile-section"><h3>Lịch sử giao dịch</h3><div class="tbl-wrap"><table><thead><tr><th>Loại</th><th>Số tiền</th><th>Mô tả</th><th>Ngày</th></tr></thead><tbody>';
@@ -1494,8 +1553,12 @@ async function renderProfileTransactions() {
 }
 
 async function renderDepositWithdrawHistory() {
-  // Fetch fresh user data
-  const meData = await apiGet('/auth/me');
+  // Fetch fresh user data + withdrawals + transactions in parallel
+  const [meData, wdData, txData] = await Promise.all([
+    apiGet('/auth/me'),
+    apiGet('/user/withdrawals?limit=50'),
+    apiGet('/user/transactions?limit=50')
+  ]);
   if (meData) {
     USER = meData.data;
     USER.locked_amount = parseFloat(meData.data.locked_amount || 0);
@@ -1503,9 +1566,7 @@ async function renderDepositWithdrawHistory() {
   }
   const detail = document.getElementById('profileDetail');
   if (!detail) return;
-  const wdData = await apiGet('/user/withdrawals?limit=50');
   const withdrawals = wdData?.data?.withdrawals || [];
-  const txData = await apiGet('/user/transactions?limit=50');
   const txns = txData?.data?.transactions || [];
   const deposits = txns.filter(t => t.type === 'deposit');
 
