@@ -220,12 +220,9 @@ app.get('/api/packages', authMiddleware, async (req, res) => {
     const cached = cacheGet('packages_list');
     if (cached) return res.json(success(cached));
     const [packages] = await pool.query(
-      `SELECT p.*, COUNT(DISTINCT pp.product_id) as product_count
-       FROM packages p
-       LEFT JOIN package_products pp ON p.id = pp.package_id AND pp.is_active=1
-       LEFT JOIN products pr ON pp.product_id = pr.id AND pr.is_active=1
-       WHERE p.is_active=1
-       GROUP BY p.id ORDER BY p.tier_level ASC`
+      `SELECT p.*,
+        (SELECT COUNT(DISTINCT pp.product_id) FROM package_products pp JOIN products pr ON pp.product_id=pr.id WHERE pp.package_id=p.id AND pp.is_active=1 AND pr.is_active=1) as product_count
+       FROM packages p WHERE p.is_active=1 ORDER BY p.tier_level ASC`
     );
     cacheSet('packages_list', packages, 60000);
     res.json(success(packages));
@@ -244,17 +241,14 @@ app.get('/api/user/packages', authMiddleware, async (req, res) => {
     const [user] = await pool.query('SELECT active_package_id, total_deposit, balance, locked_amount FROM users WHERE id=?', [req.user.id]);
     if (user.length === 0) return res.status(404).json(fail('Không tìm thấy'));
 
-    // Single query: packages + product counts + user progress
+    // Single query: packages + product counts (subquery) + user progress (LEFT JOIN)
     const [packages] = await pool.query(
       `SELECT p.*,
-        COUNT(DISTINCT pp.product_id) as product_count,
+        (SELECT COUNT(DISTINCT pp.product_id) FROM package_products pp JOIN products pr ON pp.product_id=pr.id WHERE pp.package_id=p.id AND pp.is_active=1 AND pr.is_active=1) as product_count,
         upp.completed_orders as prog_completed, upp.total_spent as prog_spent, upp.status as prog_status
        FROM packages p
-       LEFT JOIN package_products pp ON p.id = pp.package_id AND pp.is_active=1
-       LEFT JOIN products pr ON pp.product_id = pr.id AND pr.is_active=1
-       LEFT JOIN user_package_progress upp ON upp.package_id = p.id AND upp.user_id = ?
-       WHERE p.is_active=1
-       GROUP BY p.id ORDER BY p.tier_level ASC`, [req.user.id]
+       LEFT JOIN user_package_progress upp ON upp.package_id=p.id AND upp.user_id=? AND upp.status='active'
+       WHERE p.is_active=1 ORDER BY p.tier_level ASC`, [req.user.id]
     );
 
     const result = packages.map(p => ({
@@ -269,7 +263,7 @@ app.get('/api/user/packages', authMiddleware, async (req, res) => {
       } : null
     }));
     res.json(success(result));
-  } catch(e) { res.status(500).json(fail('Lỗi server')); }
+  } catch(e) { console.error('[USER-PKGS]', e.message); res.status(500).json(fail('Lỗi server')); }
 });
 
 app.post('/api/user/select-package', authMiddleware, async (req, res) => {
@@ -985,13 +979,9 @@ app.get('/api/admin/packages', authMiddleware, adminMiddleware, async (req, res)
   try {
     const [pkgs] = await pool.query(
       `SELECT p.*,
-        COUNT(DISTINCT pp.product_id) as product_count,
-        COUNT(DISTINCT u.id) as user_count
-       FROM packages p
-       LEFT JOIN package_products pp ON p.id = pp.package_id AND pp.is_active=1
-       LEFT JOIN products pr ON pp.product_id = pr.id AND pr.is_active=1
-       LEFT JOIN users u ON u.active_package_id = p.id
-       GROUP BY p.id ORDER BY p.tier_level ASC`
+        (SELECT COUNT(DISTINCT pp.product_id) FROM package_products pp JOIN products pr ON pp.product_id=pr.id WHERE pp.package_id=p.id AND pp.is_active=1 AND pr.is_active=1) as product_count,
+        (SELECT COUNT(*) FROM users u WHERE u.active_package_id=p.id) as user_count
+       FROM packages p ORDER BY p.tier_level ASC`
     );
     res.json(success(pkgs));
   } catch(e) { res.status(500).json(fail('Lỗi server')); }
