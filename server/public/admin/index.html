@@ -1,0 +1,746 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>DIOR Admin</title>
+<style>
+*{margin:0;padding:0;box-sizing:border-box}
+:root{--bg:#f5f5f5;--white:#fff;--black:#1a1a1a;--gray:#888;--border:#e0e0e0;--gold:#c9a96e;--red:#e53935;--grn:#43a047;--blue:#1e88e5}
+body{font-family:-apple-system,Helvetica,Arial,sans-serif;background:var(--bg);color:var(--black);min-height:100vh}
+.layout.authed .sidebar{display:block}
+.layout:not(.authed) .sidebar{display:none}
+.layout:not(.authed) .main{margin-left:0;max-width:none;padding:0;display:flex;align-items:center;justify-content:center;min-height:100vh}
+a{color:inherit;text-decoration:none}
+button{cursor:pointer;font:inherit;border:none;background:none}
+input,select,textarea{font:inherit;padding:8px 10px;border:1px solid var(--border);border-radius:4px;width:100%;outline:none}
+input:focus,select:focus{border-color:var(--gold)}
+textarea{resize:vertical;min-height:60px}
+.layout{display:flex;min-height:100vh}
+.sidebar{width:220px;background:var(--black);color:#fff;padding:20px 0;flex-shrink:0;position:fixed;top:0;bottom:0;left:0;overflow-y:auto}
+.sidebar .logo{font-size:18px;font-weight:600;letter-spacing:.15em;text-align:center;padding:0 20px 20px;border-bottom:1px solid #333}
+.sidebar .nav-item{display:flex;align-items:center;gap:10px;padding:12px 20px;font-size:13px;color:rgba(255,255,255,.6);cursor:pointer;transition:all .2s}
+.sidebar .nav-item:hover,.sidebar .nav-item.active{color:var(--gold);background:rgba(255,255,255,.05)}
+.main{margin-left:220px;flex:1;padding:24px;max-width:1200px}
+.page-title{font-size:22px;font-weight:600;margin-bottom:20px}
+.logout-btn{margin:28px 20px 0;width:calc(100% - 40px);padding:10px;border:1px solid #555;border-radius:4px;color:#ddd;font-size:12px;text-align:center}.logout-btn:hover{border-color:var(--gold);color:var(--gold)}
+.login-wrap{display:flex;align-items:center;justify-content:center;min-height:100vh;width:100%}
+.login-shell{max-width:420px;width:100%;padding:38px;background:#fff;border:1px solid var(--border);border-top:3px solid var(--gold);box-shadow:0 18px 50px rgba(0,0,0,.08)}
+.login-mark{font-family:Georgia,serif;font-size:30px;letter-spacing:.18em;text-align:center;margin-bottom:6px}
+.login-sub{text-align:center;color:var(--gray);font-size:12px;margin-bottom:28px}
+.login-shell .btn{margin-top:8px}
+.stats-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(180px,1fr));gap:16px;margin-bottom:24px}
+.stat-card{background:var(--white);border:1px solid var(--border);padding:16px;border-radius:8px}
+.stat-card .label{font-size:11px;color:var(--gray);text-transform:uppercase;letter-spacing:.08em;margin-bottom:6px}
+.stat-card .value{font-size:22px;font-weight:700}
+.stat-card.gold .value{color:var(--gold)}
+.tbl-wrap{background:var(--white);border:1px solid var(--border);border-radius:8px;overflow:hidden;margin-bottom:20px}
+table{width:100%;border-collapse:collapse}
+th{background:#fafafa;font-size:11px;text-transform:uppercase;letter-spacing:.06em;color:var(--gray);padding:10px 12px;text-align:left;border-bottom:1px solid var(--border);font-weight:600}
+td{padding:10px 12px;border-bottom:1px solid #f0f0f0;font-size:13px;vertical-align:middle}
+tr:hover{background:#fafafa}
+.btn{display:inline-flex;align-items:center;gap:6px;padding:8px 16px;border-radius:4px;font-size:12px;font-weight:500;transition:all .2s}
+.btn-gold{background:var(--gold);color:#fff}.btn-gold:hover{background:#b8944f}
+.btn-s{border:1px solid var(--border);color:var(--black)}.btn-s:hover{border-color:var(--gold)}
+.btn-danger{color:var(--red)}.btn-danger:hover{background:rgba(229,57,53,.06)}
+.btn-success{background:var(--grn);color:#fff}.btn-success:hover{background:#2e7d32}
+.btn-sm{padding:5px 10px;font-size:11px}
+.btn-row{display:flex;gap:8px;margin-top:12px;flex-wrap:wrap}
+.badge{display:inline-block;padding:2px 8px;border-radius:10px;font-size:10px;font-weight:600;text-transform:uppercase}
+.badge-green{background:rgba(67,160,71,.1);color:var(--grn)}
+.badge-gold{background:rgba(201,169,110,.15);color:var(--gold)}
+.badge-red{background:rgba(229,57,53,.1);color:var(--red)}
+.badge-blue{background:rgba(30,136,229,.1);color:var(--blue)}
+.modal-bg{position:fixed;inset:0;background:rgba(0,0,0,.5);z-index:1000;display:none;align-items:center;justify-content:center;backdrop-filter:blur(2px)}
+.modal-bg.show{display:flex}
+.modal{background:var(--white);border-radius:12px;padding:24px;max-width:560px;width:90%;max-height:85vh;overflow-y:auto}
+.modal h3{font-size:18px;margin-bottom:16px}
+.fg{margin-bottom:14px}
+.fg label{display:block;font-size:11px;text-transform:uppercase;letter-spacing:.08em;color:var(--gray);margin-bottom:4px}
+.fg input,.fg select,.fg textarea{font-size:13px}
+.fg-half{display:grid;grid-template-columns:1fr 1fr;gap:12px}
+.checkbox-grid{display:flex;flex-wrap:wrap;gap:8px}
+.checkbox-grid label{display:flex;align-items:center;gap:6px;font-size:12px;padding:6px 10px;border:1px solid var(--border);border-radius:4px;cursor:pointer;transition:all .2s}
+.checkbox-grid label:has(input:checked){border-color:var(--gold);background:rgba(201,169,110,.06)}
+.checkbox-grid input{width:auto}
+.drag-row{cursor:grab;padding:8px 12px;background:var(--white);border:1px solid var(--border);border-radius:4px;margin-bottom:4px;display:flex;align-items:center;gap:10px;font-size:13px;transition:all .15s}
+.drag-row:hover{border-color:var(--gold)}
+.drag-row.dragging{opacity:.4}
+.drag-row .grip{color:var(--gray);font-size:16px;cursor:grab}
+.drag-row .prod-name{flex:1}
+.drag-row .prod-price{color:var(--gold);font-weight:600}
+.hidden{display:none!important}
+.toast{position:fixed;top:20px;right:20px;padding:12px 20px;border-radius:8px;font-size:13px;z-index:2000;transform:translateX(120%);transition:transform .3s}
+.toast.show{transform:translateX(0)}
+.toast.ok{background:var(--grn);color:#fff}
+.toast.err{background:var(--red);color:#fff}
+/* Tabs */
+.tabs{display:flex;gap:0;border-bottom:2px solid var(--border);margin-bottom:20px}
+.tab{padding:10px 18px;font-size:13px;color:var(--gray);cursor:pointer;border-bottom:2px solid transparent;margin-bottom:-2px;transition:all .2s}
+.tab:hover{color:var(--black)}
+.tab.active{color:var(--gold);border-bottom-color:var(--gold);font-weight:600}
+/* User detail */
+.user-card{background:var(--white);border:1px solid var(--border);border-radius:8px;padding:20px;margin-bottom:20px}
+.user-card .avatar{width:56px;height:56px;border-radius:50%;background:var(--black);color:var(--gold);display:flex;align-items:center;justify-content:center;font-size:20px;font-weight:700;margin-bottom:12px}
+.user-card .uname{font-size:18px;font-weight:700;margin-bottom:4px}
+.user-card .uemail{font-size:12px;color:var(--gray);margin-bottom:12px}
+.user-stat{display:inline-flex;flex-direction:column;padding:12px 18px;background:#fafafa;border-radius:6px;margin-right:10px;margin-bottom:8px}
+.user-stat .us-label{font-size:10px;color:var(--gray);text-transform:uppercase;letter-spacing:.06em}
+.user-stat .us-value{font-size:18px;font-weight:700;margin-top:2px}
+.user-stat.gold .us-value{color:var(--gold)}
+.user-stat.green .us-value{color:var(--grn)}
+/* Chat */
+.chat-wrap{display:flex;height:calc(100vh - 100px);background:var(--white);border:1px solid var(--border);border-radius:8px;overflow:hidden;box-shadow:0 2px 12px rgba(0,0,0,.04)}
+.chat-sidebar{width:280px;border-right:1px solid #eee;display:flex;flex-direction:column;flex-shrink:0}
+.chat-sidebar-header{padding:16px 20px;border-bottom:1px solid #eee;font-weight:700;font-size:14px;color:var(--black);background:#fafafa}
+.chat-user-list{flex:1;overflow-y:auto}
+.cu-item{display:flex;align-items:center;gap:12px;padding:14px 20px;border-bottom:1px solid #f5f5f5;cursor:pointer;transition:all .15s}
+.cu-item:hover{background:rgba(201,169,110,.04)}
+.cu-item.active{background:rgba(201,169,110,.08);border-left:3px solid var(--gold)}
+.cu-avatar{width:36px;height:36px;border-radius:50%;background:var(--black);color:var(--gold);display:flex;align-items:center;justify-content:center;font-size:13px;font-weight:700;flex-shrink:0}
+.cu-info{flex:1;min-width:0}
+.cu-name{font-size:13px;font-weight:600;margin-bottom:2px;color:var(--black)}
+.cu-preview{font-size:11px;color:var(--gray);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.cu-meta{text-align:right;flex-shrink:0}
+.cu-time{font-size:9px;color:#bbb}
+.cu-badge{display:inline-block;background:var(--red);color:#fff;font-size:9px;font-weight:700;min-width:16px;height:16px;line-height:16px;text-align:center;border-radius:8px;margin-top:4px;padding:0 4px}
+.chat-main{flex:1;display:flex;flex-direction:column;background:#fafafa}
+.chat-header{padding:14px 20px;border-bottom:1px solid #eee;background:#fff;display:flex;align-items:center;gap:10px}
+.chat-header .ch-name{font-weight:700;font-size:14px}
+.chat-header .ch-id{font-size:11px;color:var(--gray)}
+.chat-messages{flex:1;overflow-y:auto;padding:20px;display:flex;flex-direction:column;gap:10px}
+.chat-empty{flex:1;display:flex;align-items:center;justify-content:center;color:var(--gray);font-size:13px;flex-direction:column;gap:8px}
+.chat-empty svg{width:40px;height:40px;stroke:#ddd;fill:none;stroke-width:1.5}
+.chat-msg{max-width:70%;padding:10px 16px;border-radius:16px;font-size:13px;line-height:1.6;position:relative}
+.chat-msg.user{background:#fff;border:1px solid #eee;border-bottom-left-radius:4px;align-self:flex-start;box-shadow:0 1px 3px rgba(0,0,0,.04)}
+.chat-msg.admin{background:var(--black);color:#fff;border-bottom-right-radius:4px;align-self:flex-end}
+.chat-msg .msg-time{font-size:9px;opacity:.5;margin-top:4px;display:block}
+.chat-input-bar{display:flex;border-top:1px solid #eee;padding:14px 20px;gap:10px;background:#fff;align-items:center}
+.chat-input-bar input{flex:1;border:1px solid #e0e0e0;border-radius:20px;padding:10px 16px;font-size:13px;outline:none;transition:border-color .2s}
+.chat-input-bar input:focus{border-color:var(--gold)}
+.chat-input-bar .btn{border-radius:20px;padding:10px 20px}
+/* Section panels */
+.section-panel{background:var(--white);border:1px solid var(--border);border-radius:8px;padding:20px;margin-bottom:20px}
+.section-panel h3{font-size:16px;margin-bottom:16px}
+</style>
+</head>
+<body>
+<div class="layout">
+  <div class="sidebar">
+    <div class="logo">DIOR ADMIN</div>
+    <div class="nav-item active" onclick="showSection('dashboard')">Dashboard</div>
+    <div class="nav-item" onclick="showSection('products')">Sản phẩm</div>
+    <div class="nav-item" onclick="showSection('packages')">Gian hàng</div>
+    <div class="nav-item" onclick="showSection('users')">Người dùng</div>
+    <div class="nav-item" onclick="showSection('withdrawals')">Rút tiền</div>
+    <div class="nav-item" onclick="showSection('orders')">Đơn hàng</div>
+    <div class="nav-item" onclick="showSection('chat')">Chat</div>
+    <div class="nav-item" onclick="showSection('settings')">Cài đặt</div>
+    <div class="nav-item" onclick="showSection('password')">Đổi mật khẩu</div>
+    <button class="logout-btn" onclick="doLogout()">Đăng xuất</button>
+  </div>
+  <div class="main" id="mainContent"></div>
+</div>
+<div class="modal-bg" id="modalBg"><div class="modal" id="modalContent"></div></div>
+<div class="toast" id="toast"></div>
+<script>
+const API = window.location.origin + '/api';
+let TOKEN = localStorage.getItem('admin_token') || '';
+let ADMIN = null;
+
+// Global:阻止number input nhập chữ cái và số âm
+document.addEventListener('input', function(e) {
+  if (e.target.type === 'number') {
+    e.target.value = e.target.value.replace(/[^0-9.]/g, '');
+    if (parseFloat(e.target.value) < 0) e.target.value = '';
+  }
+});
+let ALL_PRODUCTS = [];
+let ALL_PACKAGES = [];
+
+async function api(path, opts={}) {
+  const h = {'Content-Type':'application/json'};
+  if (TOKEN) h['Authorization'] = 'Bearer ' + TOKEN;
+  try {
+    const r = await fetch(API + path, {...opts, headers:{...h,...opts.headers}});
+    const d = await r.json();
+    if (r.status === 401) { doLogout(); return null; }
+    if (!d.success) { toast(d.error||'Lỗi','err'); return null; }
+    return d;
+  } catch(e) { toast('Lỗi kết nối','err'); return null; }
+}
+async function apiGet(p){return api(p)}
+async function apiPost(p,b){return api(p,{method:'POST',body:JSON.stringify(b)})}
+async function apiPut(p,b){return api(p,{method:'PUT',body:JSON.stringify(b)})}
+async function apiDel(p){return api(p,{method:'DELETE'})}
+
+function toast(msg,type='ok'){const t=document.getElementById('toast');t.textContent=msg;t.className='toast show '+type;setTimeout(()=>t.className='toast',3000)}
+function openModal(h){document.getElementById('modalContent').innerHTML=h;document.getElementById('modalBg').classList.add('show')}
+function closeModal(){document.getElementById('modalBg').classList.remove('show')}
+function showConfirmPopup(msg,onConfirm){
+  let h='<div style="text-align:center;padding:8px 0"><div style="font-size:15px;font-weight:600;margin-bottom:20px;line-height:1.5">'+msg+'</div><div class="btn-row" style="justify-content:center"><button class="btn btn-s" onclick="closeModal()">Hủy</button><button class="btn btn-gold" id="confirmPopupBtn">Xác nhận</button></div></div>';
+  openModal(h);
+  document.getElementById('confirmPopupBtn').onclick=async()=>{closeModal();if(onConfirm)await onConfirm()};
+}
+document.getElementById('modalBg').onclick=e=>{if(e.target.id==='modalBg')closeModal()};
+
+// ===== AUTH =====
+async function doLogin(){
+  const u=document.getElementById('lgUser').value.trim();
+  const p=document.getElementById('lgPass').value;
+  if(!u||!p){toast('Nhập đầy đủ','err');return}
+  const d=await apiPost('/auth/login',{login:u,password:p});
+  if(d&&d.data.user.role==='admin'){TOKEN=d.data.token;localStorage.setItem('admin_token',TOKEN);ADMIN=d.data.user;loadApp()}
+  else toast('Không có quyền admin','err')
+}
+function doLogout(){TOKEN='';ADMIN=null;localStorage.removeItem('admin_token');document.body.querySelector('.layout').classList.remove('authed');showLogin()}
+function showLogin(){
+  document.getElementById('mainContent').innerHTML='<div class="login-wrap"><div class="login-shell"><div class="login-mark">DIOR</div><div class="login-sub">Quản trị hệ thống phân phối</div><div class="fg"><label>Username</label><input id="lgUser" value="admin"></div><div class="fg"><label>Mật khẩu</label><input id="lgPass" type="password" value="admin123"></div><button class="btn btn-gold" onclick="doLogin()" style="width:100%;justify-content:center;padding:12px">Đăng nhập</button></div></div>'
+}
+
+// ===== NAVIGATION =====
+let currentSection='dashboard';
+function showSection(s){
+  currentSection=s;
+  document.querySelectorAll('.nav-item').forEach(n=>n.classList.remove('active'));
+  event.target.classList.add('active');
+  if(s==='dashboard')loadDashboard();
+  else if(s==='products')loadProducts();
+  else if(s==='packages')loadPackages();
+  else if(s==='users')loadUsers();
+  else if(s==='withdrawals')loadWithdrawals();
+  else if(s==='orders')loadOrders();
+  else if(s==='chat')loadChat();
+  else if(s==='settings')loadSettings();
+  else if(s==='password')showPasswordForm();
+}
+
+// ===== DASHBOARD =====
+async function loadDashboard(){
+  const d=await apiGet('/admin/stats');
+  if(!d)return;
+  const s=d.data;
+  document.getElementById('mainContent').innerHTML='<div class="page-title">Dashboard</div><div class="stats-grid"><div class="stat-card gold"><div class="label">Tổng người dùng</div><div class="value">'+s.total_users+'</div></div><div class="stat-card"><div class="label">Tổng đơn hàng</div><div class="value">'+s.total_orders+'</div></div><div class="stat-card gold"><div class="label">Hoa hồng</div><div class="value">$'+parseFloat(s.total_commission).toFixed(2)+'</div></div><div class="stat-card"><div class="label">Đơn hôm nay</div><div class="value">'+s.today_orders+'</div></div><div class="stat-card gold"><div class="label">Hoa hồng hôm nay</div><div class="value">$'+parseFloat(s.today_commission).toFixed(2)+'</div></div><div class="stat-card"><div class="label">Đơn chờ xử lý</div><div class="value">'+s.pending_orders+'</div></div></div>';
+}
+
+// ===== PRODUCTS =====
+async function loadProducts(){
+  const [prodData,pkgData]=await Promise.all([apiGet('/admin/products'),apiGet('/admin/packages')]);
+  if(!prodData)return;
+  ALL_PRODUCTS=prodData.data||[];
+  ALL_PACKAGES=(pkgData?.data)||[];
+  renderProducts();
+}
+function renderProducts(filterPkg=''){
+  let filtered=ALL_PRODUCTS;
+  if(filterPkg)filtered=filtered.filter(p=>(p.package_ids||'').split(',').includes(String(filterPkg)));
+  let pkgOpts='<option value="">Tất cả gian hàng</option>';
+  for(const p of ALL_PACKAGES)pkgOpts+='<option value="'+p.id+'">'+p.name+'</option>';
+  let h='<div class="page-title">Sản phẩm</div>';
+  h+='<div style="display:flex;gap:10px;margin-bottom:16px;align-items:center"><select id="prodFilter" onchange="renderProducts(this.value)" style="width:200px">'+pkgOpts+'</select><button class="btn btn-gold" onclick="openAddProduct()">+ Thêm sản phẩm</button></div>';
+  h+='<div class="tbl-wrap"><table><thead><tr><th>ID</th><th>Hình</th><th>Tên</th><th>Giá</th><th>Gian hàng</th><th>Thứ tự</th><th>Trạng thái</th><th>Thao tác</th></tr></thead><tbody>';
+  for(const p of filtered){
+    const pkgs=p.package_names||'Chưa gán';
+    const active=p.is_active?'<span class="badge badge-green">Hiện</span>':'<span class="badge badge-red">Ẩn</span>';
+    const img=p.image?'<img src="'+p.image+'" style="width:40px;height:40px;object-fit:cover;border-radius:4px">':'<div style="width:40px;height:40px;background:#f0f0f0;border-radius:4px;display:flex;align-items:center;justify-content:center;font-size:10px;color:#bbb">No</div>';
+    h+='<tr><td>'+p.id+'</td><td>'+img+'</td><td><b>'+p.name+'</b></td><td>$'+parseFloat(p.price).toLocaleString()+'</td><td style="font-size:11px">'+pkgs+'</td><td>'+p.sort_order+'</td><td>'+active+'</td><td><button class="btn btn-s btn-sm" onclick="openEditProduct('+p.id+')">Sửa</button> <button class="btn btn-s btn-sm" onclick="openSortProduct('+p.id+')">Thứ tự</button> <button class="btn btn-s btn-sm" onclick="openAssignProduct('+p.id+')">Gán gian</button></td></tr>';
+  }
+  h+='</tbody></table></div>';
+  document.getElementById('mainContent').innerHTML=h;
+}
+function openAddProduct(){
+  let pkgChecks='';
+  for(const p of ALL_PACKAGES)pkgChecks+='<label><input type="checkbox" value="'+p.id+'" name="pkg">'+p.name+'</label>';
+  openModal('<h3>Thêm sản phẩm</h3><div class="fg"><label>Tên sản phẩm</label><input id="pName"></div><div class="fg"><label>Mô tả</label><textarea id="pDesc"></textarea></div><div class="fg-half"><div class="fg"><label>Giá ($)</label><input id="pPrice" type="number"></div><div class="fg"><label>Thứ tự</label><input id="pSort" type="number" value="0"></div></div><div class="fg"><label>Ảnh URL</label><input id="pImage"></div><div class="fg"><label>Gian hàng</label><div class="checkbox-grid" id="pPkgs">'+pkgChecks+'</div></div><div class="btn-row"><button class="btn btn-s" onclick="closeModal()">Hủy</button><button class="btn btn-gold" onclick="saveProduct()">Thêm</button></div>');
+}
+async function saveProduct(){
+  const name=document.getElementById('pName').value.trim();
+  const price=parseFloat(document.getElementById('pPrice').value);
+  if(!name||!price){toast('Thiếu tên hoặc giá','err');return}
+  const pkg_ids=[...document.querySelectorAll('#pPkgs input:checked')].map(c=>parseInt(c.value));
+  const d=await apiPost('/admin/products',{name,description:document.getElementById('pDesc').value,price,image:document.getElementById('pImage').value,sort_order:parseInt(document.getElementById('pSort').value)||0,package_ids:pkg_ids});
+  if(d){toast('Đã thêm sản phẩm');closeModal();loadProducts()}
+}
+function openEditProduct(id){
+  const p=ALL_PRODUCTS.find(x=>x.id===id);if(!p)return;
+  let pkgChecks='';
+  const currentIds=(p.package_ids||'').split(',').map(s=>parseInt(s));
+  for(const pk of ALL_PACKAGES){const checked=currentIds.includes(pk.id)?'checked':'';pkgChecks+='<label><input type="checkbox" value="'+pk.id+'" name="pkg" '+checked+'>'+pk.name+'</label>';}
+  openModal('<h3>Sửa sản phẩm</h3><div class="fg"><label>Tên</label><input id="pName" value="'+p.name+'"></div><div class="fg"><label>Mô tả</label><textarea id="pDesc">'+(p.description||'')+'</textarea></div><div class="fg-half"><div class="fg"><label>Giá ($)</label><input id="pPrice" type="number" value="'+p.price+'"></div><div class="fg"><label>Thứ tự</label><input id="pSort" type="number" value="'+p.sort_order+'"></div></div><div class="fg"><label>Ảnh URL</label><input id="pImage" value="'+(p.image||'')+'"></div><div class="fg"><label>Gian hàng</label><div class="checkbox-grid" id="pPkgs">'+pkgChecks+'</div></div><div class="btn-row"><button class="btn btn-s" onclick="closeModal()">Hủy</button><button class="btn btn-gold" onclick="updateProduct('+id+')">Cập nhật</button></div>');
+}
+async function updateProduct(id){
+  const pkg_ids=[...document.querySelectorAll('#pPkgs input:checked')].map(c=>parseInt(c.value));
+  const d=await apiPut('/admin/products/'+id,{name:document.getElementById('pName').value,description:document.getElementById('pDesc').value,price:parseFloat(document.getElementById('pPrice').value),image:document.getElementById('pImage').value,sort_order:parseInt(document.getElementById('pSort').value)||0,package_ids:pkg_ids});
+  if(d){toast('Đã cập nhật');closeModal();loadProducts()}
+}
+function openSortProduct(id){
+  const p=ALL_PRODUCTS.find(x=>x.id===id);if(!p)return;
+  const pkgIds=(p.package_ids||'').split(',').map(s=>parseInt(s)).filter(Boolean);
+  if(pkgIds.length===0){toast('Sản phẩm chưa gán gian hàng','err');return}
+  const pkgId=pkgIds[0];
+  const pkgProducts=ALL_PRODUCTS.filter(x=>(x.package_ids||'').split(',').includes(String(pkgId)));
+  let rows='';
+  for(const pp of pkgProducts){rows+='<div class="drag-row" draggable="true" data-id="'+pp.id+'"><span class="grip">⠿</span><span class="prod-name">'+pp.name+'</span><span class="prod-price">$'+parseFloat(pp.price).toLocaleString()+'</span></div>';}
+  openModal('<h3>Sắp xếp sản phẩm — Gian hàng #'+pkgId+'</h3><p style="font-size:12px;color:var(--gray);margin-bottom:12px">Kéo thả để sắp xếp thứ tự sản phẩm được quay ra</p><div id="sortList">'+rows+'</div><div class="btn-row"><button class="btn btn-s" onclick="closeModal()">Hủy</button><button class="btn btn-gold" onclick="saveSortOrder('+pkgId+')">Lưu thứ tự</button></div>');
+  initDrag();
+}
+function initDrag(){
+  const list=document.getElementById('sortList');if(!list)return;let dragEl=null;
+  list.querySelectorAll('.drag-row').forEach(row=>{row.addEventListener('dragstart',e=>{dragEl=row;row.classList.add('dragging')});row.addEventListener('dragend',()=>{dragEl&&dragEl.classList.remove('dragging');dragEl=null});row.addEventListener('dragover',e=>{e.preventDefault();if(dragEl&&dragEl!==row){const rect=row.getBoundingClientRect();const mid=rect.top+rect.height/2;list.insertBefore(dragEl,e.clientY<mid?row:row.nextSibling)}});});
+}
+async function saveSortOrder(pkgId){
+  const rows=document.querySelectorAll('#sortList .drag-row');
+  const orders=[...rows].map((r,i)=>({product_id:parseInt(r.dataset.id),sort_order:i+1}));
+  const d=await apiPut('/admin/products-sort',{package_id:pkgId,product_orders:orders});
+  if(d){toast('Đã cập nhật thứ tự');closeModal();loadProducts()}
+}
+function openAssignProduct(id){
+  const p=ALL_PRODUCTS.find(x=>x.id===id);if(!p)return;
+  const currentIds=(p.package_ids||'').split(',').map(s=>parseInt(s));
+  let pkgChecks='';
+  for(const pk of ALL_PACKAGES){const checked=currentIds.includes(pk.id)?'checked':'';pkgChecks+='<label><input type="checkbox" value="'+pk.id+'" '+checked+'>'+pk.name+'</label>';}
+  openModal('<h3>Gán gian hàng: '+p.name+'</h3><div class="fg"><label>Chọn gian hàng (có thể nhiều)</label><div class="checkbox-grid" id="assignPkgs">'+pkgChecks+'</div></div><div class="btn-row"><button class="btn btn-s" onclick="closeModal()">Hủy</button><button class="btn btn-gold" onclick="saveAssign('+id+')">Lưu</button></div>');
+}
+async function saveAssign(id){
+  const pkg_ids=[...document.querySelectorAll('#assignPkgs input:checked')].map(c=>parseInt(c.value));
+  const d=await apiPost('/admin/products/'+id+'/assign',{package_ids:pkg_ids});
+  if(d){toast('Đã gán gian hàng');closeModal();loadProducts()}
+}
+// ===== PACKAGES =====
+async function loadPackages(){
+  const d=await apiGet('/admin/packages');
+  if(!d)return;
+  let h='<div class="page-title">Gian hàng</div><div class="btn-row" style="margin-bottom:16px"><button class="btn btn-gold" onclick="openAddPackage()">+ Thêm gian hàng</button></div><div class="tbl-wrap"><table><thead><tr><th>ID</th><th>Tên</th><th>VIP</th><th>Nạp tối thiểu</th><th>Tổng đơn</th><th>Đơn/ngày</th><th>Commission</th><th>Sản phẩm</th><th>Người chơi</th><th>Thao tác</th></tr></thead><tbody>';
+  for(const p of d.data){h+='<tr><td>'+p.id+'</td><td><b>'+p.name+'</b></td><td><span class="badge badge-gold">VIP '+p.tier_level+'</span></td><td>$'+parseFloat(p.min_deposit).toLocaleString()+'</td><td>'+p.max_orders+'</td><td>'+p.daily_order_limit+'</td><td>'+p.commission_rate+'%</td><td>'+p.product_count+'</td><td>'+p.user_count+'</td><td style="white-space:nowrap"><button class="btn btn-s btn-sm" onclick="viewPackageProducts('+p.id+')">Xem SP</button> <button class="btn btn-s btn-sm" onclick="addProductToPackage('+p.id+')">Thêm SP</button> <button class="btn btn-s btn-sm" onclick="openEditPackage('+p.id+')">Sửa</button> <button class="btn btn-danger btn-sm" onclick="deletePackage('+p.id+')">Ẩn</button></td></tr>';}
+  h+='</tbody></table></div>';
+  document.getElementById('mainContent').innerHTML=h;
+}
+function packageForm(p={}){return '<h3>'+(p.id?'Sửa gian hàng':'Thêm gian hàng')+'</h3><div class="fg"><label>Tên</label><input id="kName" value="'+(p.name||'')+'"></div><div class="fg"><label>Slug</label><input id="kSlug" value="'+(p.slug||'')+'"></div><div class="fg-half"><div class="fg"><label>Nạp tối thiểu</label><input id="kMin" type="number" value="'+(p.min_deposit||0)+'"></div><div class="fg"><label>Hoa hồng (%)</label><input id="kRate" type="number" step="0.01" value="'+(p.commission_rate||0)+'"></div></div><div class="fg-half"><div class="fg"><label>Tổng đơn</label><input id="kMax" type="number" value="'+(p.max_orders||0)+'"></div><div class="fg"><label>Đơn/ngày</label><input id="kDaily" type="number" value="'+(p.daily_order_limit||0)+'"></div></div><div class="fg-half"><div class="fg"><label>VIP level</label><input id="kTier" type="number" value="'+(p.tier_level||1)+'"></div><div class="fg"><label>Thứ tự</label><input id="kSort" type="number" value="'+(p.sort_order||0)+'"></div></div><div class="fg"><label>Mô tả</label><textarea id="kDesc">'+(p.description||'')+'</textarea></div><div class="btn-row"><button class="btn btn-s" onclick="closeModal()">Hủy</button><button class="btn btn-gold" onclick="savePackage('+(p.id||'null')+')">Lưu</button></div>'}
+function openAddPackage(){openModal(packageForm())}
+function openEditPackage(id){apiGet('/admin/packages').then(d=>{const p=(d?.data||[]).find(x=>x.id===id);if(p)openModal(packageForm(p))})}
+async function savePackage(id){const b={name:document.getElementById('kName').value,slug:document.getElementById('kSlug').value,min_deposit:parseFloat(document.getElementById('kMin').value)||0,max_orders:parseInt(document.getElementById('kMax').value)||0,daily_order_limit:parseInt(document.getElementById('kDaily').value)||0,commission_rate:parseFloat(document.getElementById('kRate').value)||0,tier_level:parseInt(document.getElementById('kTier').value)||1,sort_order:parseInt(document.getElementById('kSort').value)||0,description:document.getElementById('kDesc').value};const d=id?await apiPut('/admin/packages/'+id,b):await apiPost('/admin/packages',b);if(d){closeModal();loadPackages()}}
+async function deletePackage(id){showConfirmPopup('Ẩn gian hàng này?',async()=>{const d=await apiDel('/admin/packages/'+id);if(d)loadPackages()})}
+
+async function viewPackageProducts(pkgId){
+  const prodData=await apiGet('/admin/products?package_id='+pkgId);
+  const pkgData=await apiGet('/admin/packages');
+  const pkg=(pkgData?.data||[]).find(p=>p.id===pkgId);
+  const products=prodData?.data||[];
+  let h='<h3>Sản phẩm của '+(pkg?.name||'Gian hàng #'+pkgId)+'</h3>';
+  if(products.length){
+    h+='<div class="tbl-wrap" style="margin-top:12px"><table><thead><tr><th style="width:48px">Ảnh</th><th>Tên sản phẩm</th><th>Giá</th><th style="width:80px">Thứ tự</th></tr></thead><tbody>';
+    for(const p of products){
+      const img=p.image||'';
+      h+='<tr data-pid="'+p.id+'"><td><img src="'+img+'" style="width:42px;height:42px;border-radius:6px;object-fit:cover;background:#f5f5f5" onerror="this.src=\'data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 40 40%22><rect fill=%22%23f0f0f0%22 width=%2240%22 height=%2240%22/><text x=%2220%22 y=%2224%22 text-anchor=%22middle%22 font-size=%2212%22 fill=%22%23ccc%22>N/A</text></svg>\'"></td><td><b>'+p.name+'</b><br><span style="font-size:11px;color:var(--gray)">'+(p.description||'')+'</span></td><td style="color:var(--gold);font-weight:600">$'+parseFloat(p.price).toLocaleString()+'</td><td><input type="number" min="1" class="sortInput" value="'+p.pkg_sort+'" data-pid="'+p.id+'" style="width:60px;padding:4px 6px;text-align:center;border:1px solid var(--border);border-radius:4px;font-size:12px" oninput="this.value=this.value.replace(/[^0-9]/g,\'\')"></td></tr>';
+    }
+    h+='</tbody></table></div>';
+  } else { h+='<p style="color:var(--gray);margin-top:12px">Gian hàng chưa có sản phẩm nào</p>'; }
+  h+='<div class="btn-row" style="margin-top:16px"><button class="btn btn-s" onclick="closeModal()">Đóng</button>';
+  if(products.length)h+='<button class="btn btn-gold" onclick="saveProductSort('+pkgId+')">Lưu thứ tự</button>';
+  h+='<button class="btn btn-gold" onclick="closeModal();addProductToPackage('+pkgId+')">Thêm sản phẩm</button></div>';
+  openModal(h);
+}
+async function saveProductSort(pkgId){
+  const inputs=document.querySelectorAll('.sortInput');
+  const orders=[];
+  inputs.forEach(inp=>{orders.push({product_id:parseInt(inp.dataset.pid),sort_order:parseInt(inp.value)||1})});
+  orders.sort((a,b)=>a.sort_order-b.sort_order);
+  const d=await apiPut('/admin/products-sort',{package_id:pkgId,product_orders:orders});
+  if(d){toast('Đã cập nhật thứ tự');closeModal();viewPackageProducts(pkgId)}
+}
+
+async function addProductToPackage(pkgId){
+  const pkgData=await apiGet('/admin/packages');
+  const pkg=(pkgData?.data||[]).find(p=>p.id===pkgId);
+  const allProdData=await apiGet('/admin/products');
+  const allProducts=allProdData?.data||[];
+  const prodInPkg=allProducts.filter(p=>(p.package_ids||'').split(',').includes(String(pkgId)));
+  const inPkgIds=new Set(prodInPkg.map(p=>p.id));
+  const available=allProducts.filter(p=>!inPkgIds.has(p.id));
+  let h='<h3>Thêm sản phẩm vào '+(pkg?.name||'Gian hàng #'+pkgId)+'</h3>';
+  if(available.length){
+    h+='<p style="font-size:12px;color:var(--gray);margin-bottom:12px">Chọn sản phẩm chưa thuộc gian hàng này:</p>';
+    h+='<div style="max-height:400px;overflow-y:auto">';
+    for(const p of available){
+      const img=p.image||'';
+      h+='<label style="display:flex;align-items:center;gap:10px;padding:8px 12px;border:1px solid var(--border);border-radius:6px;margin-bottom:4px;cursor:pointer;transition:all .2s" onmouseenter="this.style.borderColor=\'var(--gold)\'" onmouseleave="this.style.borderColor=\'var(--border)\'"><input type="checkbox" value="'+p.id+'" class="addPkgProd" style="width:auto"><img src="'+img+'" style="width:36px;height:36px;border-radius:4px;object-fit:cover;background:#f5f5f5;flex-shrink:0" onerror="this.src=\'data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 36 36%22><rect fill=%22%23f0f0f0%22 width=%2236%22 height=%2236%22/><text x=%2218%22 y=%2222%22 text-anchor=%22middle%22 font-size=%2210%22 fill=%22%23ccc%22>N/A</text></svg>\'"><span style="flex:1;font-size:13px">'+p.name+'</span><span style="color:var(--gold);font-weight:600;font-size:12px">$'+parseFloat(p.price).toLocaleString()+'</span></label>';
+    }
+    h+='</div>';
+  } else { h+='<p style="color:var(--gray);margin-top:12px">Tất cả sản phẩm đã thuộc gian hàng này</p>'; }
+  h+='<div class="btn-row" style="margin-top:16px"><button class="btn btn-s" onclick="closeModal()">Hủy</button>';
+  if(available.length)h+='<button class="btn btn-gold" onclick="saveAddProductsToPackage('+pkgId+')">Thêm đã chọn</button>';
+  h+='</div>';
+  openModal(h);
+}
+
+async function saveAddProductsToPackage(pkgId){
+  const checked=[...document.querySelectorAll('.addPkgProd:checked')].map(c=>parseInt(c.value));
+  if(!checked.length){toast('Chọn ít nhất 1 sản phẩm','err');return;}
+  const d=await apiPost('/admin/products/assign-batch',{package_id:pkgId,product_ids:checked});
+  if(d){toast('Đã thêm '+checked.length+' sản phẩm');closeModal();loadPackages()}
+}
+
+// ===== USERS =====
+async function loadUsers(search){
+  let url='/admin/users?limit=100';
+  if(search)url+='&search='+encodeURIComponent(search);
+  const d=await apiGet(url);
+  if(!d)return;
+  const users=d.data.users||[];
+  let h='<div class="page-title">Người dùng</div>';
+  h+='<div style="display:flex;gap:10px;margin-bottom:16px;align-items:center"><input id="userSearch" placeholder="Tìm username, email, họ tên..." style="width:280px" value="'+(search||'')+'" onkeypress="if(event.key===\'Enter\')loadUsers(this.value)"><button class="btn btn-s" onclick="loadUsers(document.getElementById(\'userSearch\').value)">Tìm</button><div style="flex:1"></div><button class="btn btn-gold" onclick="openAddUser()">+ Thêm người dùng</button></div>';
+  h+='<div class="tbl-wrap"><table><thead><tr><th>ID</th><th>Username</th><th>Họ tên</th><th>Email</th><th>Số dư</th><th>Đang khóa</th><th>Trạng thái</th><th>Thao tác</th></tr></thead><tbody>';
+  for(const u of users){
+    const status=u.is_active?'<span class="badge badge-green">Hoạt động</span>':'<span class="badge badge-red">Khóa</span>';
+    const avail=Math.max(0,parseFloat(u.balance||0)-parseFloat(u.locked_amount||0));
+    h+='<tr><td>'+u.id+'</td><td><b>'+u.username+'</b></td><td>'+u.full_name+'</td><td style="font-size:11px">'+u.email+'</td><td>$'+parseFloat(u.balance).toFixed(2)+'</td><td style="color:var(--gold)">$'+parseFloat(u.locked_amount||0).toFixed(2)+'</td><td>'+status+'</td><td><button class="btn btn-s btn-sm" onclick="viewUser('+u.id+')">Chi tiết</button></td></tr>';
+  }
+  h+='</tbody></table></div>';
+  document.getElementById('mainContent').innerHTML=h;
+}
+function openAddUser(){
+  openModal('<h3>Thêm người dùng mới</h3><div class="fg-half"><div class="fg"><label>Username *</label><input id="uUsername"></div><div class="fg"><label>Email *</label><input id="uEmailAdd" type="email"></div></div><div class="fg-half"><div class="fg"><label>Họ tên</label><input id="uNameAdd"></div><div class="fg"><label>Số điện thoại</label><input id="uPhoneAdd"></div></div><div class="fg-half"><div class="fg"><label>Mật khẩu</label><input id="uPassAdd" type="password" value="user123"></div><div class="fg"><label>Số dư ban đầu ($)</label><input id="uBalanceAdd" type="number" step="0.01" value="0"></div></div><div class="btn-row"><button class="btn btn-s" onclick="closeModal()">Hủy</button><button class="btn btn-gold" onclick="saveAddUser()">Tạo tài khoản</button></div>');
+}
+async function saveAddUser(){const b={username:document.getElementById('uUsername').value,email:document.getElementById('uEmailAdd').value,full_name:document.getElementById('uNameAdd').value,phone:document.getElementById('uPhoneAdd').value,password:document.getElementById('uPassAdd').value,balance:parseFloat(document.getElementById('uBalanceAdd').value)||0};const d=await apiPost('/admin/users',b);if(d){closeModal();loadUsers()}}
+
+// ===== USER DETAIL =====
+let currentUserId=null;
+let userDetailTab='info';
+async function viewUser(id){
+  currentUserId=id;
+  userDetailTab='info';
+  await renderUserDetail();
+}
+async function renderUserDetail(){
+  if(!currentUserId)return;
+  const d=await apiGet('/admin/users/'+currentUserId);
+  if(!d)return;
+  const u=d.data;
+  const initials=(u.full_name||u.username||'U').split(' ').map(w=>w[0]).join('').substring(0,2).toUpperCase();
+  const avail=Math.max(0,parseFloat(u.balance||0)-parseFloat(u.locked_amount||0));
+  const statusBadge=u.is_active?'<span class="badge badge-green">Đang hoạt động</span>':'<span class="badge badge-red">Đã khóa</span>';
+  const pkgName=u.package_name||'Chưa chọn';
+
+  let h='<div style="margin-bottom:16px"><button class="btn btn-s" onclick="loadUsers()">← Quay lại danh sách</button></div>';
+  h+='<div class="user-card"><div style="display:flex;gap:20px;align-items:flex-start"><div class="avatar">'+initials+'</div><div style="flex:1"><div class="uname">'+u.full_name+'</div><div class="uemail">'+u.email+' · @'+u.username+' · '+statusBadge+'</div>';
+  h+='<div style="display:flex;flex-wrap:wrap;gap:0">';
+  h+='<div class="user-stat gold"><div class="us-label">Tổng số dư</div><div class="us-value">$'+parseFloat(u.balance).toFixed(2)+'</div></div>';
+  h+='<div class="user-stat"><div class="us-label">Đang khóa</div><div class="us-value" style="color:var(--gold)">$'+parseFloat(u.locked_amount||0).toFixed(2)+'</div></div>';
+  h+='<div class="user-stat green"><div class="us-label">Khả dụng</div><div class="us-value">$'+avail.toFixed(2)+'</div></div>';
+  h+='<div class="user-stat"><div class="us-label">Gian hàng</div><div class="us-value" style="font-size:14px">'+pkgName+'</div></div>';
+  h+='<div class="user-stat"><div class="us-label">Tổng nạp</div><div class="us-value">$'+parseFloat(u.total_deposit||0).toFixed(2)+'</div></div>';
+  h+='<div class="user-stat"><div class="us-label">Hoa hồng</div><div class="us-value" style="color:var(--grn)">$'+parseFloat(u.total_commission||0).toFixed(2)+'</div></div>';
+  h+='</div>';
+  h+='<div class="btn-row" style="margin-top:12px">';
+  h+='<button class="btn btn-success btn-sm" onclick="openDepositModal()">Nạp tiền</button>';
+  h+='<button class="btn btn-s btn-sm" onclick="openWithdrawModal()">Rút tiền</button>';
+  h+='<button class="btn btn-s btn-sm" onclick="openEditUserInfo()">Sửa thông tin</button>';
+  if(u.is_active){h+='<button class="btn btn-danger btn-sm" onclick="toggleUserActive(0)">Khóa tài khoản</button>';}
+  else{h+='<button class="btn btn-success btn-sm" onclick="toggleUserActive(1)">Mở tài khoản</button>';}
+  h+='</div></div></div></div>';
+
+  h+='<div class="tabs"><div class="tab '+(userDetailTab==='info'?'active':'')+'" onclick="userDetailTab=\'info\';renderUserDetail()">Thông tin</div><div class="tab '+(userDetailTab==='transactions'?'active':'')+'" onclick="userDetailTab=\'transactions\';renderUserDetail()">Giao dịch</div><div class="tab '+(userDetailTab==='deposits'?'active':'')+'" onclick="userDetailTab=\'deposits\';renderUserDetail()">Nạp/Rút</div><div class="tab '+(userDetailTab==='orders'?'active':'')+'" onclick="userDetailTab=\'orders\';renderUserDetail()">Đơn hàng</div></div>';
+
+  if(userDetailTab==='info'){
+    h+='<div class="section-panel"><h3>Thông tin cá nhân</h3>';
+    h+='<div class="fg-half"><div class="fg"><label>Họ tên</label><input value="'+(u.full_name||'')+'" disabled></div><div class="fg"><label>Email</label><input value="'+(u.email||'')+'" disabled></div></div>';
+    h+='<div class="fg-half"><div class="fg"><label>Username</label><input value="'+u.username+'" disabled></div><div class="fg"><label>Số điện thoại</label><input value="'+(u.phone||'')+'" disabled></div></div>';
+    h+='<div class="fg-half"><div class="fg"><label>Ngày tạo</label><input value="'+new Date(u.created_at).toLocaleDateString('vi')+'" disabled></div><div class="fg"><label>Mã giới thiệu</label><input value="'+(u.ref_code||'')+'" disabled></div></div></div>';
+  } else if(userDetailTab==='transactions'){
+    const txData=await apiGet('/admin/users/'+currentUserId+'/transactions?limit=50');
+    const txns=txData?.data||[];
+    const typeLabels={deposit:'Nạp tiền',withdraw:'Rút tiền',order_deduct:'Trừ đơn',order_refund:'Hoàn tiền',commission:'Hoa hồng',admin_adjust:'Admin',referral_bonus:'Giới thiệu',order_lock:'Khóa đơn',lock_topup:'Bổ sung khóa'};
+    h+='<div class="section-panel"><h3>Lịch sử giao dịch</h3>';
+    if(txns.length){
+      h+='<div class="tbl-wrap"><table><thead><tr><th>Loại</th><th>Số tiền</th><th>Số dư trước</th><th>Số dư sau</th><th>Mô tả</th><th>Ngày</th></tr></thead><tbody>';
+      for(const t of txns){
+        const amt=parseFloat(t.amount);
+        h+='<tr><td><span class="badge '+(amt>=0?'badge-green':'badge-red')+'">'+(typeLabels[t.type]||t.type)+'</span></td><td><b style="color:'+(amt>=0?'var(--grn)':'var(--red)')+'">'+(amt>=0?'+':'')+'$'+amt.toFixed(2)+'</b></td><td>$'+parseFloat(t.balance_before||0).toFixed(2)+'</td><td>$'+parseFloat(t.balance_after||0).toFixed(2)+'</td><td style="font-size:11px">'+(t.description||'')+'</td><td style="font-size:11px">'+new Date(t.created_at).toLocaleDateString('vi')+'</td></tr>';
+      }
+      h+='</tbody></table></div>';
+    } else { h+='<p style="color:var(--gray);padding:24px;text-align:center">Chưa có giao dịch</p>'; }
+    h+='</div>';
+  } else if(userDetailTab==='deposits'){
+    const txData=await apiGet('/admin/users/'+currentUserId+'/transactions?limit=50');
+    const txns=(txData?.data||[]).filter(t=>['deposit','withdraw','admin_adjust','lock_topup'].includes(t.type));
+    const typeLabels={deposit:'Nạp tiền',withdraw:'Rút tiền',admin_adjust:'Admin',lock_topup:'Bổ sung khóa'};
+    h+='<div class="section-panel"><h3>Lịch sử nạp/rút tiền</h3>';
+    if(txns.length){
+      h+='<div class="tbl-wrap"><table><thead><tr><th>Loại</th><th>Số tiền</th><th>Mô tả</th><th>Ngày</th></tr></thead><tbody>';
+      for(const t of txns){
+        const amt=parseFloat(t.amount);
+        h+='<tr><td><span class="badge '+(amt>=0?'badge-green':'badge-red')+'">'+(typeLabels[t.type]||t.type)+'</span></td><td><b style="color:'+(amt>=0?'var(--grn)':'var(--red)')+'">'+(amt>=0?'+':'')+'$'+amt.toFixed(2)+'</b></td><td style="font-size:11px">'+(t.description||'')+'</td><td style="font-size:11px">'+new Date(t.created_at).toLocaleDateString('vi')+'</td></tr>';
+      }
+      h+='</tbody></table></div>';
+    } else { h+='<p style="color:var(--gray);padding:24px;text-align:center">Chưa có lịch sử nạp/rút</p>'; }
+    h+='</div>';
+  } else if(userDetailTab==='orders'){
+    const oData=await apiGet('/admin/users/'+currentUserId+'/orders?limit=50');
+    const orders=oData?.data||[];
+    const statusColors={pending:'gold',completed:'green',cancelled:'red',frozen:'blue'};
+    const statusLabels={pending:'Chờ xử lý',completed:'Hoàn thành',cancelled:'Đã hủy',frozen:'Đóng băng'};
+    h+='<div class="section-panel"><h3>Lịch sử đơn hàng</h3>';
+    if(orders.length){
+      h+='<div class="tbl-wrap"><table><thead><tr><th>Mã đơn</th><th>Sản phẩm</th><th>Giá</th><th>Hoa hồng</th><th>Trạng thái</th><th>Ngày</th></tr></thead><tbody>';
+      for(const o of orders){
+        h+='<tr><td><b>'+o.order_code+'</b></td><td>'+o.product_name+'</td><td>$'+parseFloat(o.product_price).toLocaleString()+'</td><td style="color:var(--grn)">+$'+parseFloat(o.commission_amount).toFixed(2)+'</td><td><span class="badge badge-'+(statusColors[o.status]||'')+'">'+(statusLabels[o.status]||o.status)+'</span></td><td style="font-size:11px">'+new Date(o.created_at).toLocaleDateString('vi')+'</td></tr>';
+      }
+      h+='</tbody></table></div>';
+    } else { h+='<p style="color:var(--gray);padding:24px;text-align:center">Chưa có đơn hàng</p>'; }
+    h+='</div>';
+  }
+  document.getElementById('mainContent').innerHTML=h;
+}
+function openDepositModal(){
+  openModal('<h3>Nạp tiền cho người dùng</h3><div class="fg"><label>Số tiền ($)</label><input id="depAmount" type="number" step="0.01" min="0.01"></div><div class="fg"><label>Lý do</label><input id="depDesc" value="Admin nạp tiền"></div><div class="btn-row"><button class="btn btn-s" onclick="closeModal()">Hủy</button><button class="btn btn-success" onclick="doDeposit()">Nạp tiền</button></div>');
+}
+async function doDeposit(){
+  const amt=parseFloat(document.getElementById('depAmount').value);
+  if(!amt||amt<=0){toast('Nhập số tiền hợp lệ','err');return}
+  const d=await apiPost('/admin/users/'+currentUserId+'/deposit',{amount:amt,description:document.getElementById('depDesc').value});
+  if(d){toast('Đã nạp $'+amt.toFixed(2));closeModal();renderUserDetail()}
+}
+function openWithdrawModal(){
+  openModal('<h3>Rút tiền từ người dùng</h3><div class="fg"><label>Số tiền ($)</label><input id="wdAmount" type="number" step="0.01" min="0.01"></div><div class="fg"><label>Lý do</label><input id="wdDesc" value="Admin trừ tiền"></div><div class="btn-row"><button class="btn btn-s" onclick="closeModal()">Hủy</button><button class="btn btn-danger" onclick="doWithdraw()">Rút tiền</button></div>');
+}
+async function doWithdraw(){
+  const amt=parseFloat(document.getElementById('wdAmount').value);
+  if(!amt||amt<=0){toast('Nhập số tiền hợp lệ','err');return}
+  const d=await apiPost('/admin/users/'+currentUserId+'/withdraw',{amount:amt,description:document.getElementById('wdDesc').value});
+  if(d){toast('Đã rút $'+amt.toFixed(2));closeModal();renderUserDetail()}
+}
+async function openEditUserInfo(){
+  const d=await apiGet('/admin/users/'+currentUserId);if(!d)return;const u=d.data;
+  openModal('<h3>Sửa thông tin</h3><div class="fg-half"><div class="fg"><label>Họ tên</label><input id="euName" value="'+(u.full_name||'')+'"></div><div class="fg"><label>Số điện thoại</label><input id="euPhone" value="'+(u.phone||'')+'"></div></div><div class="fg"><label>Email</label><input id="euEmail" value="'+(u.email||'')+'"></div><div class="btn-row"><button class="btn btn-s" onclick="closeModal()">Hủy</button><button class="btn btn-gold" onclick="saveEditUserInfo()">Lưu</button></div>');
+}
+async function saveEditUserInfo(){
+  const d=await apiPut('/admin/users/'+currentUserId,{full_name:document.getElementById('euName').value,phone:document.getElementById('euPhone').value,email:document.getElementById('euEmail').value});
+  if(d){toast('Đã cập nhật');closeModal();renderUserDetail()}
+}
+async function toggleUserActive(active){
+  const d=await apiPut('/admin/users/'+currentUserId,{is_active:active?true:false});
+  if(d){toast(active?'Đã mở tài khoản':'Đã khóa tài khoản');renderUserDetail()}
+}
+
+// ===== ORDERS =====
+async function loadOrders(){
+  const d=await apiGet('/admin/orders?limit=50');
+  if(!d)return;
+  const statusColors={pending:'gold',completed:'green',cancelled:'red',frozen:'blue'};
+  const statusLabels={pending:'Chờ xử lý',completed:'Hoàn thành',cancelled:'Đã hủy',frozen:'Đóng băng'};
+  let h='<div class="page-title">Đơn hàng</div>';
+  h+='<div class="tbl-wrap"><table><thead><tr><th>Mã đơn</th><th>Người dùng</th><th>Sản phẩm</th><th>Giá</th><th>Hoa hồng</th><th>Trạng thái</th><th>Ngày</th></tr></thead><tbody>';
+  for(const o of d.data.orders||[]){
+    h+='<tr><td><b>'+o.order_code+'</b></td><td>'+o.username+'</td><td>'+o.product_name+'</td><td>$'+parseFloat(o.product_price).toLocaleString()+'</td><td style="color:var(--gold)">+$'+parseFloat(o.commission_amount).toFixed(2)+'</td><td><span class="badge badge-'+(statusColors[o.status]||'')+'">'+(statusLabels[o.status]||o.status)+'</span></td><td>'+new Date(o.created_at).toLocaleDateString('vi')+'</td></tr>';
+  }
+  h+='</tbody></table></div>';
+  document.getElementById('mainContent').innerHTML=h;
+}
+
+// ===== CHAT =====
+let chatUserId=null;
+let chatUserList=[];
+async function loadChat(){
+  chatUserId=null;
+  const d=await apiGet('/admin/chat?limit=200');
+  const msgs=d?.data||[];
+  const userMap={};
+  msgs.forEach(m=>{if(!userMap[m.user_id])userMap[m.user_id]={username:m.username,lastMsg:m.message,lastTime:m.created_at,count:0,unread:0};userMap[m.user_id].count++;if(!m.is_read&&m.sender==='user')userMap[m.user_id].unread++;if(new Date(m.created_at)>new Date(userMap[m.user_id].lastTime)){userMap[m.user_id].lastMsg=m.message;userMap[m.user_id].lastTime=m.created_at;}});
+  chatUserList=Object.entries(userMap).map(([uid,cu])=>({...cu,id:parseInt(uid)})).sort((a,b)=>new Date(b.lastTime)-new Date(a.lastTime));
+
+  let h='<div class="page-title">Chat hỗ trợ</div>';
+  h+='<div class="chat-wrap"><div class="chat-sidebar"><div class="chat-sidebar-header">Người dùng ('+chatUserList.length+')</div><div class="chat-user-list">';
+  if(chatUserList.length===0)h+='<div style="padding:32px 20px;text-align:center;color:var(--gray);font-size:12px">Chưa có tin nhắn</div>';
+  for(const cu of chatUserList){
+    const initials=(cu.username||'U').substring(0,2).toUpperCase();
+    const preview=cu.lastMsg.length>28?cu.lastMsg.substring(0,28)+'...':cu.lastMsg;
+    const t=cu.lastTime?new Date(cu.lastTime).toLocaleTimeString('vi',{hour:'2-digit',minute:'2-digit'}):'';
+    h+='<div class="cu-item" onclick="openChatUser('+cu.id+',this)"><div class="cu-avatar">'+initials+'</div><div class="cu-info"><div class="cu-name">'+cu.username+'</div><div class="cu-preview">'+preview+'</div></div><div class="cu-meta"><div class="cu-time">'+t+'</div>'+(cu.unread>0?'<div class="cu-badge">'+cu.unread+'</div>':'')+'</div></div>';
+  }
+  h+='</div></div><div class="chat-main" id="chatDetail"><div class="chat-empty"><svg viewBox="0 0 24 24"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>Chọn người dùng để bắt đầu</div></div></div>';
+  document.getElementById('mainContent').innerHTML=h;
+}
+async function openChatUser(userId,el){
+  chatUserId=userId;
+  document.querySelectorAll('.cu-item').forEach(e=>e.classList.remove('active'));
+  if(el)el.classList.add('active');
+  await apiPost('/admin/chat/mark_read',{user_id:userId});
+  // Update unread badge
+  const uItem=chatUserList.find(u=>u.id===userId);
+  if(uItem)uItem.unread=0;
+  if(el){const badge=el.querySelector('.cu-badge');if(badge)badge.remove();}
+
+  const d=await apiGet('/admin/chat?user_id='+userId+'&limit=100');
+  const msgs=d?.data||[];
+  const userName=uItem?uItem.username:'User #'+userId;
+
+  let h='<div class="chat-header"><div class="cu-avatar" style="background:var(--black);color:var(--gold)">'+userName.substring(0,2).toUpperCase()+'</div><div><div class="ch-name">'+userName+'</div><div class="ch-id">ID: '+userId+' · '+msgs.length+' tin nhắn</div></div></div>';
+  h+='<div class="chat-messages" id="chatMsgs">';
+  for(const m of msgs){
+    const time=new Date(m.created_at).toLocaleTimeString('vi',{hour:'2-digit',minute:'2-digit'});
+    const date=new Date(m.created_at).toLocaleDateString('vi');
+    h+='<div class="chat-msg '+(m.sender==='admin'?'admin':'user')+'">'+m.message+'<span class="msg-time">'+date+' '+time+'</span></div>';
+  }
+  if(msgs.length===0)h+='<div class="chat-empty"><svg viewBox="0 0 24 24"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>Chưa có tin nhắn</div>';
+  h+='</div>';
+  h+='<div class="chat-input-bar"><input id="chatInputAdmin" placeholder="Nhập tin nhắn..." onkeypress="if(event.key===\'Enter\')sendAdminChat()"><button class="btn btn-gold" onclick="sendAdminChat()">Gửi</button></div>';
+  document.getElementById('chatDetail').innerHTML=h;
+  const container=document.getElementById('chatMsgs');
+  if(container)container.scrollTop=container.scrollHeight;
+  document.getElementById('chatInputAdmin')?.focus();
+}
+async function sendAdminChat(){
+  const input=document.getElementById('chatInputAdmin');
+  const msg=input?.value.trim();
+  if(!msg||!chatUserId)return;
+  input.value='';
+  const d=await apiPost('/admin/chat/reply',{user_id:chatUserId,message:msg});
+  if(d){
+    const container=document.getElementById('chatMsgs');
+    if(container){
+      const time=new Date().toLocaleTimeString('vi',{hour:'2-digit',minute:'2-digit'});
+      const div=document.createElement('div');
+      div.className='chat-msg admin';
+      div.innerHTML=msg+'<span class="msg-time">'+time+'</span>';
+      container.appendChild(div);
+      container.scrollTop=container.scrollHeight;
+    }
+    // Update sidebar preview
+    const uItem=chatUserList.find(u=>u.id===chatUserId);
+    if(uItem){uItem.lastMsg=msg;uItem.lastTime=new Date().toISOString();}
+  }
+}
+
+// ===== WITHDRAWAL MANAGEMENT =====
+let wdFilter = '';
+async function loadWithdrawals(filter) {
+  wdFilter = filter || '';
+  let url = '/admin/withdrawals?limit=100';
+  if (wdFilter) url += '&status=' + wdFilter;
+  const d = await apiGet(url);
+  const list = d?.data?.withdrawals || [];
+  const statusLabels = { pending:'Chờ xử lý', approved:'Đã duyệt', rejected:'Bị từ chối', cancelled:'Đã hủy' };
+  const statusBadge = { pending:'badge-gold', approved:'badge-green', rejected:'badge-red', cancelled:'' };
+
+  let h = '<div class="page-title">Quản lý rút tiền</div>';
+  // Filter buttons
+  h += '<div style="display:flex;gap:6px;margin-bottom:16px;flex-wrap:wrap">';
+  const filters = [{v:'',l:'Tất cả'},{v:'pending',l:'Chờ xử lý'},{v:'approved',l:'Đã duyệt'},{v:'rejected',l:'Từ chối'},{v:'cancelled',l:'Đã hủy'}];
+  for (const f of filters) {
+    h += '<button class="btn btn-sm ' + (wdFilter===f.v?'btn-gold':'btn-s') + '" onclick="loadWithdrawals(\'' + f.v + '\')">' + f.l + '</button>';
+  }
+  h += '</div>';
+
+  h += '<div class="tbl-wrap"><table><thead><tr><th>ID</th><th>Người dùng</th><th>Phương thức</th><th>Chi tiết nhận tiền</th><th>Số tiền</th><th>Trạng thái</th><th>Ngày tạo</th><th>Thao tác</th></tr></thead><tbody>';
+  if (list.length) {
+    for (const w of list) {
+      const detail = w.method === 'bank' ? (w.bank_name + '<br>' + w.account_number + '<br>' + w.beneficiary_name) : ('MoMo<br>' + w.momo_phone);
+      const actionBtn = w.status === 'pending'
+        ? '<button class="btn btn-gold btn-sm" style="font-size:10px;padding:3px 8px" onclick="viewWithdrawal(' + w.id + ')">Xử lý</button>'
+        : '<span style="font-size:11px;color:var(--gray)">' + (w.admin_note||'—') + '</span>';
+      h += '<tr><td>#' + w.id + '</td><td><b>' + w.username + '</b><br><span style="font-size:11px;color:var(--gray)">' + w.full_name + '</span></td><td style="text-transform:capitalize">' + (w.method==='bank'?'Ngân hàng':'MoMo') + '</td><td style="font-size:11px">' + detail + '</td><td style="font-weight:600;color:var(--red)">-$' + parseFloat(w.amount).toFixed(2) + '</td><td><span class="badge ' + (statusBadge[w.status]||'') + '">' + statusLabels[w.status] + '</span></td><td style="font-size:11px">' + new Date(w.created_at).toLocaleDateString('vi') + '</td><td>' + actionBtn + '</td></tr>';
+    }
+  } else {
+    h += '<tr><td colspan="8" style="text-align:center;color:var(--gray);padding:32px">Không có lệnh rút tiền' + (wdFilter ? ' với trạng thái "' + statusLabels[wdFilter] + '"' : '') + '</td></tr>';
+  }
+  h += '</tbody></table></div>';
+  document.getElementById('mainContent').innerHTML = h;
+}
+
+async function viewWithdrawal(id) {
+  const d = await apiGet('/admin/withdrawals/' + id);
+  if (!d) return;
+  const w = d.data;
+  const avail = Math.max(0, parseFloat(w.balance||0) - parseFloat(w.locked_amount||0));
+  let h = '<div style="margin-bottom:16px"><button class="btn btn-s" onclick="loadWithdrawals()">← Quay lại</button></div>';
+  h += '<div class="page-title">Lệnh rút #' + w.id + '</div>';
+  h += '<div style="display:grid;grid-template-columns:1fr 1fr;gap:16px;margin-bottom:20px">';
+  // User info
+  h += '<div class="section-panel"><div style="font-weight:600;margin-bottom:8px">Thông tin người dùng</div>';
+  h += '<div style="font-size:13px;line-height:1.8"><b>' + w.username + '</b> (' + w.full_name + ')<br>Email: ' + w.email + '<br>Phone: ' + (w.phone||'—') + '<br>Số dư: $' + parseFloat(w.balance).toFixed(2) + '<br>Đang khóa: $' + parseFloat(w.locked_amount||0).toFixed(2) + '<br>Khả dụng: <b style="color:var(--gold)">$' + avail.toFixed(2) + '</b></div></div>';
+  // Withdrawal info
+  h += '<div class="section-panel"><div style="font-weight:600;margin-bottom:8px">Thông tin rút tiền</div>';
+  h += '<div style="font-size:13px;line-height:1.8">Phương thức: <b>' + (w.method==='bank'?'Ngân hàng':'MoMo') + '</b><br>';
+  if (w.method === 'bank') {
+    h += 'Ngân hàng: ' + w.bank_name + '<br>Số TK: ' + w.account_number + '<br>Chủ TK: ' + w.beneficiary_name;
+  } else {
+    h += 'Số MoMo: ' + w.momo_phone;
+  }
+  h += '<br>Số tiền: <b style="color:var(--red);font-size:16px">-$' + parseFloat(w.amount).toFixed(2) + '</b>';
+  h += '<br>Ngày tạo: ' + new Date(w.created_at).toLocaleString('vi');
+  if (w.admin_note) h += '<br>Ghi chú: ' + w.admin_note;
+  h += '</div></div></div>';
+
+  if (w.status === 'pending') {
+    h += '<div class="section-panel"><div style="font-weight:600;margin-bottom:12px">Xử lý lệnh rút</div>';
+    h += '<div class="fg"><label>Ghi chú (bắt buộc khi từ chối)</label><textarea id="wdAdminNote" rows="2" placeholder="Nhập lý do từ chối (nếu có)" style="width:100%;padding:8px;border:1px solid var(--border);border-radius:4px;font-size:13px"></textarea></div>';
+    h += '<div class="btn-row" style="margin-top:12px">';
+    h += '<button class="btn btn-gold" onclick="processWithdrawal(' + w.id + ',\'approved\')">Duyệt rút tiền</button>';
+    h += '<button class="btn" style="background:var(--red);color:#fff" onclick="processWithdrawal(' + w.id + ',\'rejected\')">Từ chối</button>';
+    h += '</div></div>';
+  }
+  document.getElementById('mainContent').innerHTML = h;
+}
+
+async function processWithdrawal(id, status) {
+  const note = document.getElementById('wdAdminNote')?.value?.trim() || '';
+  if (status === 'rejected' && !note) { toast('Nhập lý do từ chối', 'err'); return; }
+  if (status === 'approved') {
+    showConfirmPopup('Duyệt lệnh rút này? Tiền sẽ được trừ khỏi tài khoản user.', async () => {
+      const d = await apiPut('/admin/withdrawals/' + id + '/status', { status, admin_note: note });
+      if (d) { toast('Đã duyệt lệnh rút'); loadWithdrawals(); }
+    });
+  } else {
+    const d = await apiPut('/admin/withdrawals/' + id + '/status', { status, admin_note: note });
+    if (d) { toast('Đã từ chối lệnh rút'); loadWithdrawals(); }
+  }
+}
+
+// ===== SETTINGS =====
+async function loadSettings(){
+  const data = await apiGet('/api/admin/settings');
+  const settings = data?.data || [];
+  const rate = settings.find(s => s.setting_key === 'exchange_rate');
+  const currentRate = rate ? rate.setting_value : '27000';
+  document.getElementById('mainContent').innerHTML =
+    '<div class="page-title">Cài đặt</div>' +
+    '<div class="section-panel" style="max-width:520px">' +
+    '<div class="fg"><label>Tỷ giá USD/VND</label><input id="settingExchangeRate" type="number" value="' + currentRate + '" min="1" step="1000" style="max-width:200px"></div>' +
+    '<p style="font-size:12px;color:#999;margin:-8px 0 16px">Số VND tương đương 1 USD. Người dùng có thể chuyển đổi hiển thị giữa USD và VND.</p>' +
+    '<button class="btn btn-gold" onclick="saveSettings()">Lưu cài đặt</button></div>';
+}
+
+async function saveSettings(){
+  const rate = document.getElementById('settingExchangeRate').value;
+  if (!rate || parseFloat(rate) <= 0) { toast('Tỷ giá không hợp lệ', 'error'); return; }
+  const data = await apiPut('/api/admin/settings', { settings: [{ key: 'exchange_rate', value: rate, description: 'Tỷ giá USD/VND' }] });
+  if (data) toast('Đã lưu cài đặt', 'ok');
+}
+
+// ===== CHANGE PASSWORD =====
+function showPasswordForm(){
+  document.getElementById('mainContent').innerHTML='<div class="page-title">Đổi mật khẩu</div><div class="section-panel" style="max-width:480px"><div class="fg"><label>Mật khẩu hiện tại</label><input id="cpCurrent" type="password"></div><div class="fg"><label>Mật khẩu mới</label><input id="cpNew" type="password"></div><div class="fg"><label>Xác nhận mật khẩu mới</label><input id="cpConfirm" type="password"></div><div class="btn-row"><button class="btn btn-gold" onclick="doChangePassword()">Đổi mật khẩu</button></div></div>';
+}
+async function doChangePassword(){
+  const cur=document.getElementById('cpCurrent').value;
+  const np=document.getElementById('cpNew').value;
+  const cf=document.getElementById('cpConfirm').value;
+  if(!cur||!np){toast('Nhập đầy đủ','err');return}
+  if(np.length<6){toast('Mật khẩu mới tối thiểu 6 ký tự','err');return}
+  if(np!==cf){toast('Mật khẩu xác nhận không khớp','err');return}
+  const d=await apiPut('/admin/change-password',{current_password:cur,new_password:np});
+  if(d){toast('Đã đổi mật khẩu');document.getElementById('cpCurrent').value='';document.getElementById('cpNew').value='';document.getElementById('cpConfirm').value='';}
+}
+
+// ===== INIT =====
+(async()=>{
+  if(TOKEN){
+    const d=await apiGet('/auth/me');
+    if(d&&d.data.role==='admin'){ADMIN=d.data;loadApp()}
+    else showLogin();
+  } else showLogin();
+})();
+function loadApp(){document.body.querySelector('.layout').classList.add('authed');loadDashboard()}
+</script>
+</body>
+</html>

@@ -1,0 +1,7 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(cat package.json && echo --- && cat ../edit1.py && echo --- && ls -la public/admin | head -30)"
+    ]
+  }
+}

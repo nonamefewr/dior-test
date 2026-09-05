@@ -1,0 +1,679 @@
+<!DOCTYPE html>
+<html lang="en-VN" dir="ltr">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1.0">
+  <title>Dior Fashion | Fashion & Accessories</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link href="https://fonts.googleapis.com/css2?family=Playfair+Display:ital,wght@0,400;0,500;0,600;1,400&family=Inter:wght@300;400;500&display=swap" rel="stylesheet">
+  <style>
+    *, *::before, *::after { margin: 0; padding: 0; box-sizing: border-box; }
+
+    :root {
+      --black: #1a1a1a;
+      --white: #ffffff;
+      --off-white: #f7f7f7;
+      --gray: #888888;
+      --light-gray: #e5e5e5;
+      --font-serif: 'Playfair Display', Georgia, 'Times New Roman', serif;
+      --font-sans: 'Inter', -apple-system, Helvetica Neue, Arial, sans-serif;
+    }
+
+    html { scroll-behavior: smooth; }
+
+    body {
+      font-family: var(--font-sans);
+      color: var(--black);
+      background: var(--white);
+      -webkit-font-smoothing: antialiased;
+    }
+
+    a { color: inherit; text-decoration: none; }
+    img { display: block; width: 100%; height: auto; }
+    button { background: none; border: none; cursor: pointer; font: inherit; color: inherit; }
+
+    /* ========== HEADER ========== */
+    .header {
+      position: fixed;
+      top: 0; left: 0; right: 0;
+      z-index: 100;
+      background: rgba(255,255,255,0.97);
+      backdrop-filter: blur(12px);
+      border-bottom: 1px solid var(--light-gray);
+      transition: transform 0.3s ease;
+    }
+
+    .header-top {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 0 48px;
+      height: 56px;
+    }
+
+    .header-left, .header-right {
+      display: flex;
+      align-items: center;
+      gap: 24px;
+    }
+
+    .header-link {
+      font-size: 11px;
+      letter-spacing: 0.08em;
+      text-transform: uppercase;
+      font-weight: 400;
+      color: var(--black);
+      position: relative;
+    }
+
+    .header-link::after {
+      content: '';
+      position: absolute;
+      bottom: -2px; left: 0;
+      width: 0; height: 1px;
+      background: var(--black);
+      transition: width 0.25s ease;
+    }
+    .header-link:hover::after { width: 100%; }
+
+    .logo {
+      font-family: var(--font-serif);
+      font-size: 28px;
+      font-weight: 500;
+      letter-spacing: 0.18em;
+      text-transform: uppercase;
+      position: absolute;
+      left: 50%;
+      transform: translateX(-50%);
+    }
+
+    .icon-btn {
+      width: 20px; height: 20px;
+      display: flex; align-items: center; justify-content: center;
+    }
+    .icon-btn svg { width: 18px; height: 18px; stroke: var(--black); fill: none; stroke-width: 1.5; }
+
+    /* ========== HERO ========== */
+    .hero {
+      margin-top: 56px;
+      position: relative;
+      height: 85vh;
+      min-height: 550px;
+      overflow: hidden;
+      display: flex;
+      align-items: flex-end;
+      justify-content: center;
+    }
+
+    .hero-media {
+      position: absolute;
+      inset: 0;
+    }
+    .hero-media img {
+      width: 100%; height: 100%;
+      object-fit: cover;
+      object-position: center 30%;
+    }
+
+    .hero-overlay {
+      position: absolute;
+      inset: 0;
+      background: linear-gradient(
+        to bottom,
+        rgba(0,0,0,0) 40%,
+        rgba(0,0,0,0.15) 70%,
+        rgba(0,0,0,0.35) 100%
+      );
+    }
+
+    .hero-content {
+      position: relative;
+      z-index: 2;
+      text-align: center;
+      padding-bottom: 64px;
+      color: var(--white);
+    }
+
+    .hero-title {
+      font-family: var(--font-serif);
+      font-size: clamp(28px, 4vw, 44px);
+      font-weight: 400;
+      letter-spacing: 0.06em;
+      margin-bottom: 20px;
+    }
+
+    .hero-links {
+      display: flex;
+      gap: 32px;
+      justify-content: center;
+    }
+
+    .hero-link {
+      font-size: 12px;
+      letter-spacing: 0.12em;
+      text-transform: uppercase;
+      color: var(--white);
+      border-bottom: 1px solid rgba(255,255,255,0.6);
+      padding-bottom: 3px;
+      transition: border-color 0.25s;
+    }
+    .hero-link:hover { border-color: var(--white); }
+
+    /* ========== PRODUCT CAROUSEL ========== */
+    .products-section {
+      padding: 72px 48px;
+    }
+
+    .section-header {
+      text-align: center;
+      margin-bottom: 40px;
+    }
+
+    .section-title {
+      font-family: var(--font-serif);
+      font-size: clamp(22px, 3vw, 30px);
+      font-weight: 400;
+      letter-spacing: 0.04em;
+    }
+
+    .products-grid {
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
+      gap: 24px;
+      max-width: 1400px;
+      margin: 0 auto;
+    }
+
+    .product-card {
+      text-align: center;
+      cursor: pointer;
+    }
+
+    .product-image {
+      position: relative;
+      aspect-ratio: 3/4;
+      overflow: hidden;
+      background: var(--off-white);
+      margin-bottom: 16px;
+    }
+    .product-image img {
+      width: 100%; height: 100%;
+      object-fit: cover;
+      transition: transform 0.6s ease;
+    }
+    .product-card:hover .product-image img { transform: scale(1.03); }
+
+    .product-badge {
+      position: absolute;
+      top: 16px; left: 16px;
+      font-size: 10px;
+      letter-spacing: 0.1em;
+      text-transform: uppercase;
+      background: var(--white);
+      padding: 4px 10px;
+    }
+
+    .product-name {
+      font-family: var(--font-serif);
+      font-size: 14px;
+      font-weight: 400;
+      letter-spacing: 0.04em;
+      margin-bottom: 6px;
+    }
+
+    .product-material {
+      font-size: 11px;
+      color: var(--gray);
+      letter-spacing: 0.04em;
+    }
+
+    .product-price {
+      font-size: 12px;
+      margin-top: 8px;
+      letter-spacing: 0.03em;
+    }
+
+    /* ========== EDITORIAL SECTIONS ========== */
+    .editorial {
+      position: relative;
+      overflow: hidden;
+    }
+
+    .editorial-image {
+      width: 100%;
+      aspect-ratio: 16/9;
+      overflow: hidden;
+    }
+    .editorial-image img {
+      width: 100%; height: 100%;
+      object-fit: cover;
+      transition: transform 0.8s ease;
+    }
+    .editorial:hover .editorial-image img { transform: scale(1.02); }
+
+    .editorial-overlay {
+      position: absolute;
+      inset: 0;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      text-align: center;
+      color: var(--white);
+      padding: 24px;
+    }
+
+    .editorial-overlay.dark {
+      color: var(--black);
+    }
+
+    .editorial-label {
+      font-size: 10px;
+      letter-spacing: 0.15em;
+      text-transform: uppercase;
+      margin-bottom: 12px;
+      font-weight: 400;
+    }
+
+    .editorial-title {
+      font-family: var(--font-serif);
+      font-size: clamp(26px, 4vw, 48px);
+      font-weight: 400;
+      letter-spacing: 0.04em;
+      line-height: 1.2;
+      margin-bottom: 16px;
+    }
+
+    .editorial-desc {
+      font-size: 13px;
+      max-width: 480px;
+      line-height: 1.7;
+      letter-spacing: 0.02em;
+      margin-bottom: 24px;
+      font-weight: 300;
+    }
+
+    .editorial-btn {
+      font-size: 11px;
+      letter-spacing: 0.12em;
+      text-transform: uppercase;
+      border-bottom: 1px solid currentColor;
+      padding-bottom: 3px;
+      transition: opacity 0.25s;
+    }
+    .editorial-btn:hover { opacity: 0.6; }
+
+    /* ========== DUAL GRID ========== */
+    .dual-grid {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+    }
+
+    .dual-grid .editorial-image {
+      aspect-ratio: 4/5;
+    }
+
+    /* ========== QUOTE BANNER ========== */
+    .quote-banner {
+      padding: 80px 48px;
+      text-align: center;
+      background: var(--off-white);
+    }
+
+    .quote-text {
+      font-family: var(--font-serif);
+      font-size: clamp(20px, 3vw, 32px);
+      font-weight: 400;
+      font-style: italic;
+      max-width: 800px;
+      margin: 0 auto 20px;
+      line-height: 1.5;
+      letter-spacing: 0.02em;
+    }
+
+    .quote-link {
+      font-size: 11px;
+      letter-spacing: 0.12em;
+      text-transform: uppercase;
+      border-bottom: 1px solid var(--black);
+      padding-bottom: 3px;
+      display: inline-block;
+      transition: opacity 0.25s;
+    }
+    .quote-link:hover { opacity: 0.6; }
+
+    /* ========== BANNER FULL ========== */
+    .banner-full {
+      position: relative;
+      height: 70vh;
+      min-height: 480px;
+      overflow: hidden;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+    }
+    .banner-full .hero-media img {
+      object-position: center center;
+    }
+
+    /* ========== FOOTER ========== */
+    .footer {
+      background: var(--black);
+      color: var(--white);
+      padding: 64px 48px 32px;
+    }
+
+    .footer-top {
+      display: grid;
+      grid-template-columns: repeat(4, 1fr);
+      gap: 40px;
+      max-width: 1200px;
+      margin: 0 auto 48px;
+    }
+
+    .footer-col-title {
+      font-size: 10px;
+      letter-spacing: 0.15em;
+      text-transform: uppercase;
+      margin-bottom: 20px;
+      font-weight: 400;
+      opacity: 0.6;
+    }
+
+    .footer-col ul { list-style: none; }
+    .footer-col li { margin-bottom: 10px; }
+    .footer-col a {
+      font-size: 12px;
+      letter-spacing: 0.03em;
+      opacity: 0.75;
+      transition: opacity 0.2s;
+      font-weight: 300;
+    }
+    .footer-col a:hover { opacity: 1; }
+
+    .footer-bottom {
+      border-top: 1px solid rgba(255,255,255,0.15);
+      padding-top: 24px;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      max-width: 1200px;
+      margin: 0 auto;
+    }
+
+    .footer-logo {
+      font-family: var(--font-serif);
+      font-size: 18px;
+      letter-spacing: 0.18em;
+      text-transform: uppercase;
+    }
+
+    .footer-legal {
+      font-size: 10px;
+      opacity: 0.5;
+      letter-spacing: 0.04em;
+    }
+
+    .footer-social {
+      display: flex;
+      gap: 20px;
+    }
+    .footer-social a {
+      opacity: 0.6;
+      transition: opacity 0.2s;
+      font-size: 11px;
+      letter-spacing: 0.08em;
+      text-transform: uppercase;
+    }
+    .footer-social a:hover { opacity: 1; }
+
+    /* ========== RESPONSIVE ========== */
+    @media (max-width: 1024px) {
+      .header-top { padding: 0 24px; }
+      .products-section { padding: 48px 24px; }
+      .footer { padding: 48px 24px 24px; }
+      .footer-top { grid-template-columns: repeat(2, 1fr); }
+    }
+
+    @media (max-width: 768px) {
+      .header-top { height: 48px; }
+      .header-link:not(.logo) { display: none; }
+      .logo { font-size: 22px; }
+      .hero { margin-top: 48px; height: 75vh; }
+      .hero-title { font-size: 24px; }
+      .products-grid { grid-template-columns: 1fr; gap: 40px; }
+      .dual-grid { grid-template-columns: 1fr; }
+      .footer-top { grid-template-columns: 1fr; }
+      .footer-bottom { flex-direction: column; gap: 16px; text-align: center; }
+    }
+
+    /* ========== ANIMATIONS ========== */
+    @media (prefers-reduced-motion: no-preference) {
+      .fade-in {
+        opacity: 0;
+        transform: translateY(24px);
+        transition: opacity 0.7s ease, transform 0.7s ease;
+      }
+      .fade-in.visible {
+        opacity: 1;
+        transform: translateY(0);
+      }
+    }
+  </style>
+</head>
+<body>
+
+  <!-- HEADER -->
+  <header class="header">
+    <div class="header-top">
+      <div class="header-left">
+        <a href="/login" class="header-link">Stores</a>
+        <a href="/login" class="header-link">Client Services</a>
+      </div>
+      <a href="/" class="logo">Dior</a>
+      <div class="header-right">
+        <button class="icon-btn" aria-label="Search">
+          <svg viewBox="0 0 24 24"><circle cx="11" cy="11" r="7"/><line x1="16.5" y1="16.5" x2="21" y2="21"/></svg>
+        </button>
+        <a href="/login" class="icon-btn" aria-label="Account">
+          <svg viewBox="0 0 24 24"><circle cx="12" cy="8" r="4"/><path d="M4 21c0-4.4 3.6-8 8-8s8 3.6 8 8"/></svg>
+        </a>
+        <button class="icon-btn" aria-label="Shopping bag">
+          <svg viewBox="0 0 24 24"><path d="M6 6h12l1.5 14H4.5L6 6z"/><path d="M9 6V5a3 3 0 0 1 6 0v1"/></svg>
+        </button>
+      </div>
+    </div>
+  </header>
+
+  <!-- HERO -->
+  <section class="hero">
+    <div class="hero-media">
+      <img src="https://media.christiandior.com/cdn-cgi/image/width=3000,format=auto,quality=80/pm_11872_1482_1482012-2gcasr37p4-whr.jpg" alt="Fashion & Accessories">
+    </div>
+    <div class="hero-overlay"></div>
+    <div class="hero-content">
+      <h1 class="hero-title">Fashion &amp; Accessories</h1>
+      <div class="hero-links">
+        <a href="/login" class="hero-link">Women</a>
+        <a href="/login" class="hero-link">Men</a>
+      </div>
+    </div>
+  </section>
+
+  <!-- DISCOVER THE COLLECTION -->
+  <section class="products-section fade-in">
+    <div class="section-header">
+      <h2 class="section-title">Discover the Collection</h2>
+    </div>
+    <div class="products-grid">
+      <a href="/login" class="product-card">
+        <div class="product-image">
+          <img src="https://media.christiandior.com/cdn-cgi/image/width=3000,format=auto,quality=80/pm_11872_1512_1512252-g2i4ddehcf-whr.jpg" alt="B30 Countdown Tech Sneaker">
+          <span class="product-badge">New</span>
+        </div>
+        <div class="product-name">B30 Countdown Tech Sneaker</div>
+        <div class="product-material">White Semi-Transparent N3O Nylon, Technical Fabric</div>
+      </a>
+      <a href="/login" class="product-card">
+        <div class="product-image">
+          <img src="https://media.christiandior.com/cdn-cgi/image/width=3000,format=auto,quality=80/pm_11872_1514_1514418-6jt6rewwyu-whr.jpg" alt="Petit CD Earrings">
+        </div>
+        <div class="product-name">Petit CD Earrings</div>
+        <div class="product-material">Gold-Finish Metal and White Resin Pearls</div>
+      </a>
+      <a href="/login" class="product-card">
+        <div class="product-image">
+          <img src="https://media.christiandior.com/cdn-cgi/image/width=3000,format=auto,quality=80/pm_11872_1466_1466064-s4a1n2ckvm-whr.jpg" alt="Dior Oblique Bifold Wallet">
+        </div>
+        <div class="product-name">Dior Oblique Bifold Wallet</div>
+        <div class="product-material">Beige and Black Dior Oblique Jacquard</div>
+      </a>
+    </div>
+  </section>
+
+  <!-- AN ARISTO-PUNK SPIRIT -->
+  <section class="editorial fade-in">
+    <div class="editorial-image">
+      <img src="https://media.christiandior.com/cdn-cgi/image/width=3000,format=auto,quality=80/pm_11872_1513_1513971-bqrgyq54xy-whr.jpg" alt="An Aristo-Punk Spirit">
+    </div>
+    <div class="editorial-overlay">
+      <span class="editorial-label">Women's Collection</span>
+      <h2 class="editorial-title">An Aristo-Punk Spirit</h2>
+      <p class="editorial-desc">An edit for Fall.</p>
+      <a href="/login" class="editorial-btn">Discover</a>
+    </div>
+  </section>
+
+  <!-- QUOTE BANNER -->
+  <div class="quote-banner fade-in">
+    <p class="quote-text">"Clothes with the appearance of flowers."</p>
+    <a href="/login" class="quote-link">Discover the Collection</a>
+  </div>
+
+  <!-- DAYDREAMING + NEW TAILORING (DUAL) -->
+  <section class="dual-grid">
+    <div class="editorial fade-in">
+      <div class="editorial-image">
+        <img src="https://media.christiandior.com/cdn-cgi/image/width=3000,format=auto,quality=80/pm_11872_1482_1482012-2gcasr37p4-whr.jpg" alt="Daydreaming">
+      </div>
+      <div class="editorial-overlay">
+        <span class="editorial-label">Women's Collection</span>
+        <h2 class="editorial-title">Daydreaming</h2>
+        <a href="/login" class="editorial-btn">Discover</a>
+      </div>
+    </div>
+    <div class="editorial fade-in">
+      <div class="editorial-image">
+        <img src="https://media.christiandior.com/cdn-cgi/image/width=3000,format=auto,quality=80/pm_11872_1512_1512252-g2i4ddehcf-whr.jpg" alt="New Tailoring">
+      </div>
+      <div class="editorial-overlay">
+        <span class="editorial-label">Men's Collection</span>
+        <h2 class="editorial-title">New Tailoring</h2>
+        <a href="/login" class="editorial-btn">Discover</a>
+      </div>
+    </div>
+  </section>
+
+  <!-- SEPTEMBER'S NEW WARDROBE -->
+  <section class="editorial fade-in">
+    <div class="editorial-image">
+      <img src="https://media.christiandior.com/cdn-cgi/image/width=3000,format=auto,quality=80/pm_11872_1514_1514418-6jt6rewwyu-whr.jpg" alt="September's New Wardrobe">
+    </div>
+    <div class="editorial-overlay">
+      <span class="editorial-label">Women's Collection</span>
+      <h2 class="editorial-title">September's New Wardrobe</h2>
+      <a href="/login" class="editorial-btn">Discover</a>
+    </div>
+  </section>
+
+  <!-- ROSE DES VENTS -->
+  <section class="editorial fade-in">
+    <div class="editorial-image">
+      <img src="https://media.christiandior.com/cdn-cgi/image/width=3000,format=auto,quality=80/pm_11872_1466_1466064-s4a1n2ckvm-whr.jpg" alt="Rose des Vents">
+    </div>
+    <div class="editorial-overlay">
+      <span class="editorial-label">Jewelry & Timepieces</span>
+      <h2 class="editorial-title">Rose des Vents</h2>
+      <p class="editorial-desc">Celebrating one of Christian Dior's most cherished emblems, the Rose des Vents jewelry is decorated with colorful ornamental stones and sparkling diamonds.</p>
+      <a href="/login" class="editorial-btn">Discover</a>
+    </div>
+  </section>
+
+  <!-- FOOTER -->
+  <footer class="footer">
+    <div class="footer-top">
+      <div class="footer-col">
+        <div class="footer-col-title">Dior Boutiques</div>
+        <ul>
+          <li><a href="/login">Christian Dior Couture</a></li>
+          <li><a href="/login">Parfums Christian Dior</a></li>
+        </ul>
+      </div>
+      <div class="footer-col">
+        <div class="footer-col-title">Client Services</div>
+        <ul>
+          <li><a href="/login">Contact</a></li>
+          <li><a href="/login">FAQ</a></li>
+          <li><a href="/login">Boutique Appointment</a></li>
+          <li><a href="/login">Couture Advantages</a></li>
+        </ul>
+      </div>
+      <div class="footer-col">
+        <div class="footer-col-title">The House of Dior</div>
+        <ul>
+          <li><a href="/login">Dior Sustainability</a></li>
+          <li><a href="/login">Ethics & Compliance</a></li>
+          <li><a href="/login">Careers</a></li>
+        </ul>
+      </div>
+      <div class="footer-col">
+        <div class="footer-col-title">Legal</div>
+        <ul>
+          <li><a href="/login">Legal Terms</a></li>
+          <li><a href="/login">Privacy Notice</a></li>
+          <li><a href="/login">Personal Data</a></li>
+          <li><a href="/login">Sitemap</a></li>
+        </ul>
+      </div>
+    </div>
+    <div class="footer-bottom">
+      <div class="footer-logo">Dior</div>
+      <div class="footer-social">
+        <a href="/login">Instagram</a>
+        <a href="/login">Twitter</a>
+        <a href="/login">YouTube</a>
+        <a href="/login">Pinterest</a>
+        <a href="/login">Podcast</a>
+      </div>
+      <div class="footer-legal">&copy; 2026 Dior. All rights reserved.</div>
+    </div>
+  </footer>
+
+  <script>
+    // Intersection Observer for fade-in animations
+    const observer = new IntersectionObserver((entries) => {
+      entries.forEach(entry => {
+        if (entry.isIntersecting) {
+          entry.target.classList.add('visible');
+        }
+      });
+    }, { threshold: 0.15 });
+
+    document.querySelectorAll('.fade-in').forEach(el => observer.observe(el));
+
+    // Header hide/show on scroll
+    let lastScroll = 0;
+    const header = document.querySelector('.header');
+    window.addEventListener('scroll', () => {
+      const current = window.scrollY;
+      if (current > lastScroll && current > 200) {
+        header.style.transform = 'translateY(-100%)';
+      } else {
+        header.style.transform = 'translateY(0)';
+      }
+      lastScroll = current;
+    }, { passive: true });
+  </script>
+
+</body>
+</html>
