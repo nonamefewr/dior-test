@@ -352,8 +352,10 @@ app.post('/api/orders/spin', authMiddleware, apiLimiter, async (req, res) => {
     const [pending] = await conn.query('SELECT id FROM orders WHERE user_id=? AND package_id=? AND status="pending" LIMIT 1 FOR UPDATE', [req.user.id, user.active_package_id]);
     if (pending.length) return res.status(400).json(fail('Vui lòng phân phối đơn hiện tại trước khi quay tiếp'));
     if (progress.completed_orders >= pkg[0].max_orders) return res.status(400).json(fail('Đã hoàn thành gian hàng này'));
-    const today = new Date().toISOString().slice(0,10);
-    const dailySpins = user.daily_spins_date === today ? user.daily_spins_today : 0;
+    // Use MySQL CURDATE() for daily spin check to avoid UTC/local timezone mismatch
+    const [[mysqlToday]] = await conn.query('SELECT CURDATE() as today');
+    const todayMySQL = mysqlToday.today instanceof Date ? mysqlToday.today.toISOString().slice(0,10) : String(mysqlToday.today);
+    const dailySpins = user.daily_spins_date === todayMySQL ? user.daily_spins_today : 0;
     if (dailySpins >= pkg[0].daily_order_limit) return res.status(400).json(fail('Đã hết lượt quay hôm nay (' + pkg[0].daily_order_limit + ' lần/ngày)'));
     const [products] = await conn.query('SELECT pr.* FROM products pr JOIN package_products pp ON pr.id=pp.product_id WHERE pp.package_id=? AND pp.is_active=1 AND pr.is_active=1 ORDER BY pp.sort_order ASC', [user.active_package_id]);
     if (!products.length) return res.status(400).json(fail('Gian hàng chưa có sản phẩm'));
@@ -415,10 +417,11 @@ app.post('/api/orders/:id/distribute', authMiddleware, apiLimiter, async (req,re
     // the same amount, so the user's available balance remains unchanged.
     const beforeBalance=parseFloat(users[0].balance || 0);
     const newBalance=beforeBalance+commissionAmount;
-    const today=new Date().toISOString().slice(0,10);
-    const used=users[0].daily_spins_date===today?users[0].daily_spins_today:0;
+    const [[mysqlToday2]] = await conn.query('SELECT CURDATE() as today');
+    const todayMySQL2 = mysqlToday2.today instanceof Date ? mysqlToday2.today.toISOString().slice(0,10) : String(mysqlToday2.today);
+    const used=users[0].daily_spins_date===todayMySQL2?users[0].daily_spins_today:0;
     const completed=progress.completed_orders+1;
-    await conn.query('UPDATE users SET balance=?,locked_amount=?,daily_spins_today=?,daily_spins_date=? WHERE id=?',[newBalance,newLock,used+1,today,req.user.id]);
+    await conn.query('UPDATE users SET balance=?,locked_amount=?,daily_spins_today=?,daily_spins_date=? WHERE id=?',[newBalance,newLock,used+1,todayMySQL2,req.user.id]);
     await conn.query('UPDATE user_package_progress SET completed_orders=?,total_spent=total_spent+? WHERE id=?',[completed,order.product_price,progress.id]);
     await conn.query('UPDATE orders SET status="completed",completed_at=NOW(),balance_before=?,balance_after=? WHERE id=?',[beforeBalance,newBalance,order.id]);
     await conn.query('INSERT INTO transactions (user_id,type,amount,balance_before,balance_after,description,reference_id,reference_type) VALUES (?,?,?,?,?,?,?,?)',[req.user.id,'commission',commissionAmount,beforeBalance,newBalance,'Cộng hoa hồng đơn: '+order.product_name,order.id,'order']);
@@ -652,10 +655,9 @@ app.get('/api/user/transactions', authMiddleware, async (req, res) => {
 
 app.get('/api/user/stats', authMiddleware, async (req, res) => {
   try {
-    const today = new Date().toISOString().slice(0,10);
     const [todayStats] = await pool.query(
       `SELECT COUNT(*) as orders, COALESCE(SUM(commission_amount),0) as commission
-       FROM orders WHERE user_id=? AND DATE(created_at)=?`, [req.user.id, today]);
+       FROM orders WHERE user_id=? AND DATE(created_at)=CURDATE()`, [req.user.id]);
     const [totalStats] = await pool.query(
       `SELECT COUNT(*) as orders, COALESCE(SUM(commission_amount),0) as commission
        FROM orders WHERE user_id=? AND status='completed'`, [req.user.id]);
@@ -668,7 +670,9 @@ app.get('/api/user/stats', authMiddleware, async (req, res) => {
         dailyLimit = pkg[0].daily_order_limit;
         packageName = pkg[0].name;
         totalInPkg = pkg[0].max_orders;
-        const dailyUsed = user[0].daily_spins_date === today ? user[0].daily_spins_today : 0;
+        const [[mysqlToday3]] = await pool.query('SELECT CURDATE() as today');
+        const todayMySQL3 = mysqlToday3.today instanceof Date ? mysqlToday3.today.toISOString().slice(0,10) : String(mysqlToday3.today);
+        const dailyUsed = user[0].daily_spins_date === todayMySQL3 ? user[0].daily_spins_today : 0;
         dailyRemaining = dailyLimit - dailyUsed;
         const [prog] = await pool.query('SELECT completed_orders, status FROM user_package_progress WHERE user_id=? AND package_id=? AND status="active"', [req.user.id, user[0].active_package_id]);
         if (prog.length > 0) {
@@ -722,9 +726,8 @@ app.get('/api/admin/stats', authMiddleware, adminMiddleware, async (req, res) =>
     const [completedOrders] = await pool.query('SELECT COUNT(*) as cnt, COALESCE(SUM(commission_amount),0) as comm FROM orders WHERE status="completed"');
     const [totalDeposit] = await pool.query('SELECT COALESCE(SUM(amount),0) as total FROM transactions WHERE type="deposit" AND status="completed"');
     const [packages] = await pool.query('SELECT COUNT(*) as cnt FROM packages WHERE is_active=1');
-    const today = new Date().toISOString().slice(0,10);
-    const [todayOrders] = await pool.query('SELECT COUNT(*) as cnt FROM orders WHERE DATE(created_at)=?', [today]);
-    const [todayCommission] = await pool.query('SELECT COALESCE(SUM(commission_amount),0) as total FROM orders WHERE status="completed" AND DATE(completed_at)=?', [today]);
+    const [todayOrders] = await pool.query('SELECT COUNT(*) as cnt FROM orders WHERE DATE(created_at)=CURDATE()');
+    const [todayCommission] = await pool.query('SELECT COALESCE(SUM(commission_amount),0) as total FROM orders WHERE status="completed" AND DATE(completed_at)=CURDATE()');
     const [pendingOrders] = await pool.query('SELECT COUNT(*) as cnt FROM orders WHERE status="pending"');
     res.json(success({
       total_users: users[0].cnt, total_orders: orders[0].cnt,
@@ -1367,7 +1370,7 @@ async function start() {
     await initDB();
     // Seed default exchange rate if not exists
     await pool.query("INSERT INTO settings (setting_key,setting_value,description) VALUES ('exchange_rate','27000','Tỷ giá USD/VND') ON DUPLICATE KEY UPDATE setting_value=setting_value");
-    server.listen(PORT, () => {
+    server.listen(PORT, '0.0.0.0', () => {
       console.log(`[SERVER] Running on http://localhost:${PORT}`);
       console.log(`[SERVER] Admin: http://localhost:${PORT}/admin`);
     });

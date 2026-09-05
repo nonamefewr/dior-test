@@ -1013,6 +1013,25 @@ function launchFireworks(x, y) {
   }
 }
 
+/* Refresh spin page stats in-place (called after distribute) */
+async function renderSpinStats(wrapEl) {
+  const statsData = await apiGet('/user/stats');
+  if (!statsData) return;
+  const stats = statsData.data;
+  lastStats = stats;
+  USER.balance = stats.balance;
+  USER.locked_amount = stats.locked_amount;
+  let h = '<div class="spin-stats">';
+  h += '<div class="spin-stat"><div class="spin-stat-label">Hôm nay</div><div class="spin-stat-value gold">' + fmtMoney(stats.today_commission||0) + '</div></div>';
+  h += '<div class="spin-stat"><div class="spin-stat-label">Đơn / Lượt</div><div class="spin-stat-value">' + (stats.today_orders||0) + ' / <span style="color:' + (stats.daily_remaining>0?'var(--grn)':'var(--red)') + '">' + (stats.daily_remaining||0) + '</span></div></div>';
+  h += '<div class="spin-stat"><div class="spin-stat-label">Khóa</div><div class="spin-stat-value" style="color:var(--gold)">' + fmtMoney(stats.locked_amount||0) + '</div></div>';
+  h += '</div>';
+  if (stats.locked_amount > 0) {
+    h += '<div style="max-width:380px;margin:0 auto 12px;padding:6px 12px;background:rgba(201,169,110,.06);border:1px solid rgba(201,169,110,.12);border-radius:6px;font-size:11px;display:flex;justify-content:space-between"><span style="color:var(--gray)">Số dư khả dụng</span><span style="font-weight:600">' + fmtMoney(Math.max(0, stats.available_balance)) + '</span></div>';
+  }
+  wrapEl.innerHTML = h;
+}
+
 function updateSpinSteps(activeStep) {
   const steps = ['Quay đơn','Kết quả','Phân phối'];
   let h = '';
