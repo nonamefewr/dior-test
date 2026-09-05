@@ -6,6 +6,14 @@ async function seed() {
   const conn = await pool.getConnection();
 
   try {
+    // ===== CLEAN DATA (order matters for foreign keys) =====
+    await conn.query('DELETE FROM orders');
+    await conn.query('DELETE FROM transactions');
+    await conn.query('DELETE FROM user_package_progress');
+    await conn.query('DELETE FROM package_products');
+    await conn.query('DELETE FROM products');
+    await conn.query('DELETE FROM packages');
+
     // ===== PACKAGES =====
     const packages = [
       { name: 'Gian hàng Bạc', slug: 'silver', image: 'https://media.christiandior.com/cdn-cgi/image/width=400,format=auto,quality=80/pm_11872_1512_1512252-g2i4ddehcf-whr.jpg', tier_level: 1, min_deposit: 500, max_orders: 60, daily_order_limit: 15, commission_rate: 0.6, description: 'Gian hàng Bạc - 60 đơn tổng, quay 15 lần/ngày, hoa hồng 0.6%' },
@@ -70,10 +78,6 @@ async function seed() {
         { name: 'Rose des Vents Tiara', description: 'Vương miện Rose des Vents', image: 'https://media.christiandior.com/cdn-cgi/image/width=300,format=auto,quality=80/pm_11872_1513_1513971-bqrgyq54xy-whr.jpg', price: 12000 },
       ]
     };
-
-    // Clear catalog assignments and products before rebuilding the deterministic sample catalog.
-    await conn.query('DELETE FROM package_products');
-    await conn.query('DELETE FROM products');
 
     // Insert all products (independent, no package_id FK)
     const allProductRows = {};

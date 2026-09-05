@@ -462,15 +462,14 @@ app.post('/api/orders/complete-package', authMiddleware, apiLimiter, async (req,
     const totalSpent = parseFloat(orderStats[0].total_spent);
     const totalCommission = parseFloat(orderStats[0].total_commission);
     const lockedAmount = parseFloat(user.locked_amount || 0);
+    const currentBalance = parseFloat(user.balance || 0);
 
-    // locked_amount đã bao gồm cả tiền gốc và hoa hồng đã cộng sau từng lần phân phối.
-    // Vì vậy chỉ giải phóng đúng số tiền đang khóa, không cộng hoa hồng lần hai.
-    const releaseAmount = lockedAmount;
-    const newBalance = parseFloat(user.balance) + releaseAmount;
+    // Lock chỉ là "reservation" — tiền đã nằm trong balance từ distribute.
+    // Complete-package chỉ cần clear lock, balance KHÔNG thay đổi.
     const newLocked = 0;
     await conn.query(
-      `UPDATE users SET balance=balance+?, locked_amount=0, total_commission=total_commission+? WHERE id=?`,
-      [releaseAmount, totalCommission, req.user.id]
+      `UPDATE users SET locked_amount=0, total_commission=total_commission+? WHERE id=?`,
+      [totalCommission, req.user.id]
     );
 
     // Mark progress as completed
@@ -479,7 +478,7 @@ app.post('/api/orders/complete-package', authMiddleware, apiLimiter, async (req,
     // Log transactions
     await conn.query(
       'INSERT INTO transactions (user_id, type, amount, balance_before, balance_after, description, reference_id, reference_type) VALUES (?,?,?,?,?,?,?,?)',
-      [req.user.id, 'order_refund', releaseAmount, user.balance, newBalance, 'Hoàn tiền khóa + hoa hồng gian hàng ' + pkg[0].name, progress.id, 'package']
+      [req.user.id, 'unlock', lockedAmount, currentBalance, currentBalance, 'Giải phóng khóa gian hàng ' + pkg[0].name, progress.id, 'package']
     );
 
     // Referral bonus
@@ -499,9 +498,9 @@ app.post('/api/orders/complete-package', authMiddleware, apiLimiter, async (req,
       total_spent: totalSpent,
       commission_earned: totalCommission,
       released_locked: lockedAmount,
-      total_return: releaseAmount,
-      balance_after: newBalance,
-      locked_amount: newLocked
+      balance_after: currentBalance,
+      locked_amount: newLocked,
+      available_balance: currentBalance
     }));
   } catch(e) {
     await conn.rollback();
@@ -1271,6 +1270,7 @@ app.put('/api/admin/withdrawals/:id/status', authMiddleware, adminMiddleware, as
       if (w.status !== 'pending') { await conn.rollback(); return res.status(400).json(fail('Lệnh đã được xử lý')); }
 
       if (status === 'approved') {
+        console.log('[WITHDRAW-APPROVE] id=' + req.params.id + ' user_id=' + w.user_id + ' amount=' + w.amount + ' balance=' + w.balance + ' locked=' + w.locked_amount);
         // Check balance still sufficient
         const avail = Math.max(0, parseFloat(w.balance) - parseFloat(w.locked_amount || 0));
         if (parseFloat(w.amount) > avail) {
@@ -1278,7 +1278,9 @@ app.put('/api/admin/withdrawals/:id/status', authMiddleware, adminMiddleware, as
           return res.status(400).json(fail('Số dư không đủ để duyệt (khả dụng: $' + avail.toFixed(2) + ')'));
         }
         const newBalance = parseFloat(w.balance) - parseFloat(w.amount);
+        // Only deduct from balance (available), keep locked_amount untouched
         await conn.query('UPDATE users SET balance=? WHERE id=?', [newBalance, w.user_id]);
+        console.log('[WITHDRAW-APPROVE] UPDATED balance=' + newBalance);
         // Record transaction
         await conn.query(
           'INSERT INTO transactions (user_id, type, amount, balance_before, balance_after, description, reference_id, reference_type) VALUES (?,\'withdraw\',?,?,?,?,?,?)',
@@ -1288,6 +1290,7 @@ app.put('/api/admin/withdrawals/:id/status', authMiddleware, adminMiddleware, as
 
       await conn.query('UPDATE withdrawals SET status=?, admin_note=?, processed_at=NOW() WHERE id=?', [status, admin_note||'', req.params.id]);
       await conn.commit();
+      console.log('[WITHDRAW-APPROVE] COMMIT id=' + req.params.id);
       res.json(success({ message: status === 'approved' ? 'Đã duyệt lệnh rút' : 'Đã từ chối lệnh rút' }));
     } catch(e) { await conn.rollback(); throw e; }
     finally { conn.release(); }
