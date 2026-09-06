@@ -400,6 +400,10 @@ tr:last-child td{border-bottom:none}
 
 /* LiveChat widget position */
 #chat-widget-container{bottom:22%!important}
+@media(max-width:768px){
+  #chat-widget-container{bottom:80px!important;max-height:70vh!important}
+  #chat-widget-container iframe{max-height:70vh!important}
+}
 </style>
 </head>
 <body>
@@ -661,6 +665,15 @@ function openLiveChat() {
     toast('Đang tải LiveChat...', 'ok');
   }
 }
+// Auto-minimize LiveChat when clicking outside
+document.addEventListener('click', function(e) {
+  if (window.LiveChatWidget) {
+    var widget = document.getElementById('chat-widget-container');
+    if (widget && !widget.contains(e.target)) {
+      LiveChatWidget.call('minimize');
+    }
+  }
+});
 function doLogout() {
   TOKEN = ''; USER = null;
   localStorage.removeItem('dior_token');
