@@ -658,7 +658,10 @@ async function doLogin() {
   }).catch(()=>{});
 })();
 
+var __lc_just_opened = false;
 function openLiveChat() {
+  __lc_just_opened = true;
+  setTimeout(function(){ __lc_just_opened = false; }, 200);
   if (window.LiveChatWidget) {
     LiveChatWidget.call('maximize');
   } else {
@@ -667,6 +670,7 @@ function openLiveChat() {
 }
 // Auto-minimize LiveChat when clicking outside
 document.addEventListener('click', function(e) {
+  if (__lc_just_opened) return;
   if (window.LiveChatWidget) {
     var widget = document.getElementById('chat-widget-container');
     if (widget && !widget.contains(e.target)) {
