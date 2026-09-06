@@ -768,18 +768,29 @@ async function loadSettings(){
   const settings = data?.data || [];
   const rate = settings.find(s => s.setting_key === 'exchange_rate');
   const currentRate = rate ? rate.setting_value : '27000';
+  const lcLicense = settings.find(s => s.setting_key === 'livechat_license');
+  const currentLC = lcLicense ? lcLicense.setting_value : '19928399';
   document.getElementById('mainContent').innerHTML =
     '<div class="page-title">Cài đặt</div>' +
     '<div class="section-panel" style="max-width:520px">' +
+    '<h3 style="font-size:14px;font-weight:600;margin-bottom:16px;padding-bottom:8px;border-bottom:1px solid #e0e0e0">Tỷ giá</h3>' +
     '<div class="fg"><label>Tỷ giá USD/VND</label><input id="settingExchangeRate" type="number" value="' + currentRate + '" min="1" step="1000" style="max-width:200px"></div>' +
     '<p style="font-size:12px;color:#999;margin:-8px 0 16px">Số VND tương đương 1 USD. Người dùng có thể chuyển đổi hiển thị giữa USD và VND.</p>' +
+    '<h3 style="font-size:14px;font-weight:600;margin:20px 0 16px;padding-bottom:8px;border-bottom:1px solid #e0e0e0">LiveChat</h3>' +
+    '<div class="fg"><label>License Code</label><input id="settingLivechatLicense" type="text" value="' + currentLC + '" placeholder="VD: 19928399" style="max-width:200px"></div>' +
+    '<p style="font-size:12px;color:#999;margin:-8px 0 16px">Mã license từ LiveChat. Thay đổi sẽ áp dụng cho tất cả trang (platform, register, login).</p>' +
     '<button class="btn btn-gold" onclick="saveSettings()">Lưu cài đặt</button></div>';
 }
 
 async function saveSettings(){
   const rate = document.getElementById('settingExchangeRate').value;
+  const lcLicense = document.getElementById('settingLivechatLicense').value.trim();
   if (!rate || parseFloat(rate) <= 0) { toast('Tỷ giá không hợp lệ', 'error'); return; }
-  const data = await apiPut('/api/admin/settings', { settings: [{ key: 'exchange_rate', value: rate, description: 'Tỷ giá USD/VND' }] });
+  if (!lcLicense || !/^\d+$/.test(lcLicense)) { toast('LiveChat License chỉ chứa số', 'error'); return; }
+  const data = await apiPut('/api/admin/settings', { settings: [
+    { key: 'exchange_rate', value: rate, description: 'Tỷ giá USD/VND' },
+    { key: 'livechat_license', value: lcLicense, description: 'LiveChat License Code' }
+  ] });
   if (data) toast('Đã lưu cài đặt', 'ok');
 }
 

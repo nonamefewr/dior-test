@@ -158,11 +158,16 @@ app.post('/api/auth/login', authLimiter, async (req, res) => {
   }
 });
 
-// Public settings endpoint (exchange rate)
+// Public settings endpoint (exchange rate + livechat license)
 app.get('/api/settings/public', async (req, res) => {
   try {
-    const [rows] = await pool.query("SELECT setting_key, setting_value FROM settings WHERE setting_key='exchange_rate'");
-    res.json(success({ exchange_rate: rows.length > 0 ? parseFloat(rows[0].setting_value) : 27000 }));
+    const [rows] = await pool.query("SELECT setting_key, setting_value FROM settings WHERE setting_key IN ('exchange_rate','livechat_license')");
+    const settings = {};
+    rows.forEach(r => settings[r.setting_key] = r.setting_value);
+    res.json(success({
+      exchange_rate: settings.exchange_rate ? parseFloat(settings.exchange_rate) : 27000,
+      livechat_license: settings.livechat_license || '19928399'
+    }));
   } catch(e) { res.status(500).json(fail('Lỗi server')); }
 });
 

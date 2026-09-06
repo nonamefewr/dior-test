@@ -5,15 +5,7 @@
 <meta name="viewport" content="width=device-width,initial-scale=1">
 <title>DIOR Platform</title>
 
-<!-- Start of LiveChat code -->
-<script>
-    window.__lc = window.__lc || {};
-    window.__lc.license = 19928399;
-    window.__lc.integration_name = "manual_channels";
-    window.__lc.product_name = "livechat";
-    ;(function(n,t,c){function i(n){return e._h?e._h.apply(null,n):e._q.push(n)}var e={_q:[],_h:null,_v:"2.0",on:function(){i(["on",c.call(arguments)])},once:function(){i(["once",c.call(arguments)])},off:function(){i(["off",c.call(arguments)])},get:function(){if(!e._h)throw new Error("[LiveChatWidget] You can't use getters before load.");return i(["get",c.call(arguments)])},call:function(){i(["call",c.call(arguments)])},init:function(){var n=t.createElement("script");n.async=!0,n.type="text/javascript";n.src="https://cdn.livechatinc.com/tracking.js";t.head.appendChild(n)}};!n.__lc.asyncInit&&e.init(),n.LiveChatWidget=n.LiveChatWidget||e}(window,document,[].slice))
-</script>
-<!-- End of LiveChat code -->
+<!-- LiveChat loaded dynamically from API -->
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=Playfair+Display:wght@400;500;600&family=Inter:wght@300;400;500;600&display=swap" rel="stylesheet">
 <style>
@@ -406,8 +398,8 @@ tr:last-child td{border-bottom:none}
   .spin-wheel-wrap,.spin-wheel{width:240px;height:240px}
 }
 
-/* LiveChat widget - move higher */
-#chat-widget-container{bottom:35%!important}
+/* LiveChat widget position */
+#chat-widget-container{bottom:22%!important}
 </style>
 </head>
 <body>
@@ -584,7 +576,7 @@ function showTopupDialog(topupAmt, availableBal, productName, productPrice) {
   h += '<b>S\u1ed1 d\u01b0 kh\u1ea3 d\u1ee5ng:</b> ' + fmtMoney(availableBal);
   h += '</div>';
   h += '<div class="cd-actions">';
-  h += '<button class="cd-ok gold" onclick="hideTopupDialog();openDepositModal()">N\u1eadp ti\u1ec1n ngay</button>';
+  h += '<button class="cd-ok gold" onclick="hideTopupDialog();openLiveChat()">Li\u00ean h\u1ec7 CSKH n\u1ea1p ti\u1ec1n</button>';
   h += '<button class="cd-cancel" onclick="hideTopupDialog()">H\u1ee7y</button>';
   h += '</div></div>';
   var overlay = document.getElementById('topupOverlay');
@@ -655,6 +647,23 @@ function openLiveChat() {
     LiveChatWidget.call('maximize');
   } else {
     toast('Đang tải LiveChat...', 'ok');
+    // Fetch license from API and init LiveChat
+    fetch('/api/settings/public').then(r=>r.json()).then(d=>{
+      const license = d?.data?.livechat_license || '19928399';
+      window.__lc = window.__lc || {};
+      window.__lc.license = parseInt(license);
+      window.__lc.integration_name = "manual_channels";
+      window.__lc.product_name = "livechat";
+      var n=document,t=c;
+      function c(){var e={_q:[],_h:null,_v:"2.0",on:function(){c(["on",Array.prototype.slice.call(arguments)])},once:function(){c(["once",Array.prototype.slice.call(arguments)])},off:function(){c(["off",Array.prototype.slice.call(arguments)])},get:function(){if(e._h)return e._h.apply(null,arguments);e._q.push(arguments)},call:function(){c(["call",Array.prototype.slice.call(arguments)])},init:function(){var o=t.createElement("script");o.async=!0;o.type="text/javascript";o.src="https://cdn.livechatinc.com/tracking.js";t.head.appendChild(o)}};if(!n.__lc.asyncInit)e.init();n.LiveChatWidget=n.LiveChatWidget||e}
+      c();
+    }).catch(()=>{
+      // Fallback: try with default license
+      window.__lc = window.__lc || {};
+      window.__lc.license = 19928399;
+      window.__lc.integration_name = "manual_channels";
+      window.__lc.product_name = "livechat";
+    });
   }
 }
 function doLogout() {
@@ -709,7 +718,7 @@ function renderHomeStats(s, vipLevel) {
   const avail = s.available_balance !== undefined ? Math.max(0, parseFloat(s.available_balance)) : Math.max(0, parseFloat(s.balance || 0) - locked);
   const currLabel = CURRENCY === 'VND' ? 'USD' : 'VND';
   let h = '<div style="display:flex;justify-content:flex-end;margin-bottom:4px"><button onclick="toggleCurrency()" style="background:rgba(201,169,110,.12);border:1px solid rgba(201,169,110,.25);color:var(--gold);padding:3px 10px;border-radius:12px;font-size:11px;cursor:pointer;font-weight:600">' + CURRENCY + ' ↔ ' + currLabel + '</button></div>';
-  h += '<div class="home-balance"><div class="balance-display"><div class="bal-label">Số dư khả dụng</div><div class="bal-amount">' + fmtMoney(avail) + '</div></div><button class="btn btn-gold btn-sm" onclick="openDepositModal()">Nạp tiền</button><button class="btn btn-s btn-sm" onclick="openWithdrawModal()">Rút tiền</button></div>';
+  h += '<div class="home-balance"><div class="balance-display"><div class="bal-label">Số dư khả dụng</div><div class="bal-amount">' + fmtMoney(avail) + '</div></div><button class="btn btn-gold btn-sm" onclick="openLiveChat()">Nạp tiền</button><button class="btn btn-s btn-sm" onclick="openWithdrawModal()">Rút tiền</button></div>';
   if (locked > 0) {
     h += '<div style="max-width:380px;margin:0 auto 12px;padding:8px 14px;background:linear-gradient(135deg,rgba(201,169,110,.08),rgba(201,169,110,.03));border:1px solid rgba(201,169,110,.15);border-radius:8px;display:flex;justify-content:space-between;align-items:center;font-size:12px"><span style="color:var(--gray)">Tiền đang đóng băng</span><span style="font-weight:700;color:var(--gold)">' + fmtMoney(locked) + '</span></div>';
   }
@@ -844,16 +853,7 @@ async function completePackage() {
   }
 }
 
-// ===== DEPOSIT / WITHDRAW =====
-function openDepositModal() {
-  openModal('<h3>Nạp tiền</h3><div class="fg"><label>Số tiền nạp ($)</label><input id="depositAmount" type="number" min="10" placeholder="Nhập số tiền (tối thiểu $10)" oninput="this.value=this.value.replace(/[^0-9.]/g,\'\');if(parseFloat(this.value)<0)this.value=\'\'"></div><div style="font-size:11px;color:var(--gray);margin-bottom:12px">Vui lòng liên hệ hỗ trợ để biết phương thức nạp tiền.</div><div class="btn-row"><button class="btn btn-s" onclick="closeModal()">Hủy</button><button class="btn btn-gold" onclick="submitDeposit()">Xác nhận</button></div>');
-}
-async function submitDeposit() {
-  const amt = parseFloat(document.getElementById('depositAmount')?.value);
-  if (!amt || amt < 10) { toast('Số tiền tối thiểu $10', 'err'); return; }
-  toast('Yêu cầu nạp tiền đã gửi. Vui lòng chờ xử lý.', 'ok');
-  closeModal();
-}
+// ===== WITHDRAW =====
 async function openWithdrawModal() {
   // Fetch fresh user data — always call /auth/me to get最新的 balance + locked_amount
   const meData = await apiGet('/auth/me');
@@ -1230,7 +1230,7 @@ async function renderSpin() {
       html += '</div>';
     }
   } else {
-    html += '<div style="grid-column:1/-1;text-align:center;padding:40px 20px;background:var(--white);border:1px solid var(--light-gray)"><div style="font-size:40px;margin-bottom:10px">&#128274;</div><div style="font-family:var(--font-serif);font-size:15px;margin-bottom:6px">Ch\u01b0a m\u1edf kh\u00f3a gian h\u00e0ng</div><div style="font-size:12px;color:var(--gray);margin-bottom:16px">N\u1eadp ti\u1ec1n \u0111\u1ec3 m\u1edf kh\u00f3a gian h\u00e0ng cao hơn</div><button class="btn btn-gold btn-sm" onclick="openDepositModal()">N\u1eadp ti\u1ec1n ngay</button></div>';
+    html += '<div style="grid-column:1/-1;text-align:center;padding:40px 20px;background:var(--white);border:1px solid var(--light-gray)"><div style="font-size:40px;margin-bottom:10px">&#128274;</div><div style="font-family:var(--font-serif);font-size:15px;margin-bottom:6px">Ch\u01b0a m\u1edf kh\u00f3a gian h\u00e0ng</div><div style="font-size:12px;color:var(--gray);margin-bottom:16px">N\u1eadp ti\u1ec1n \u0111\u1ec3 m\u1edf kh\u00f3a gian h\u00e0ng cao hơn</div><button class="btn btn-gold btn-sm" onclick="openLiveChat()">N\u1eadp ti\u1ec1n ngay</button></div>';
   }
   html += '</div></div>';
 
@@ -1409,7 +1409,7 @@ async function doDistribute() {
       '<div class="result-name" style="color:var(--red)">Số dư không đủ</div>' +
       '<div class="result-info">Đơn hàng yêu cầu: <b>' + fmtMoney(priceReq) + '</b><br>Số dư hiện tại: <b>' + fmtMoney(availBal) + '</b><br>Cần nạp thêm: <b style="color:var(--red)">' + fmtMoney(needed) + '</b></div>' +
       '<div class="result-btns">' +
-      '<button class="btn btn-gold" onclick="hideResult();openDepositModal()">Nạp tiền ngay</button>' +
+      '<button class="btn btn-gold" onclick="hideResult();openLiveChat()">Liên hệ CSKH nạp tiền</button>' +
       '<button class="btn btn-s btn-sm" onclick="hideResult();renderSpin()">Đóng</button>' +
       '</div>';
     return;
@@ -1554,18 +1554,18 @@ async function renderProfile() {
   html += '<div class="profile-section"><h3>Thông tin cá nhân</h3>';
   html += '<div class="profile-row"><div class="fg"><label>Họ tên</label><input id="pfName" value="' + (USER?.full_name||'').replace(/"/g,'&quot;') + '"></div><div class="fg"><label>Email</label><input value="' + (USER?.email||'') + '" disabled style="opacity:.6"></div></div>';
   html += '<div class="profile-row"><div class="fg"><label>Số điện thoại</label><input value="' + (USER?.phone||'').replace(/"/g,'&quot;') + '" disabled style="opacity:.6"></div><div class="fg"><label>Username</label><input value="' + (USER?.username||'') + '" disabled style="opacity:.6"></div></div>';
-  html += '<div style="font-size:11px;color:var(--gray);margin-bottom:10px">Chỉ có thể thay đổi họ tên. Đổi email, SĐT vui lòng liên hệ CSKH.</div>';
+  html += '<div style="font-size:11px;color:var(--gray);margin-bottom:10px">Chỉ có thể thay đổi họ tên. Đổi email, SĐT vui lòng <span style="color:var(--gold);cursor:pointer;text-decoration:underline" onclick="openLiveChat()">liên hệ CSKH</span>.</div>';
   html += '<button class="btn btn-p" onclick="saveProfile()" style="margin-top:4px">Lưu thay đổi</button></div>';
 
   var hasBank = USER?.bank_account || USER?.bank_name;
   html += '<div class="profile-section"><h3>Thông tin ngân hàng</h3>';
   if (hasBank) {
     var maskedAcc = maskBankAccount(USER?.bank_account||'');
-    html += '<div style="font-size:11px;color:var(--gray);margin-bottom:12px">Đã lưu. Liên hệ CSKH để thay đổi.</div>';
+    html += '<div style="font-size:11px;color:var(--gray);margin-bottom:12px">Đã lưu. <span style="color:var(--gold);cursor:pointer;text-decoration:underline" onclick="openLiveChat()">Liên hệ CSKH</span> để thay đổi.</div>';
     html += '<div class="profile-row"><div class="fg"><label>Số tài khoản</label><div style="display:flex;align-items:center;gap:8px"><input id="pfBankAccDisplay" value="' + maskedAcc + '" disabled style="opacity:.6;flex:1;font-family:monospace"><button class="btn btn-s btn-sm" type="button" id="btnToggleAcc" onclick="toggleBankAcc()">Hiện</button></div></div><div class="fg"><label>Ngân hàng</label><input value="' + (USER?.bank_name||'').replace(/"/g,'&quot;') + '" disabled style="opacity:.6"></div></div>';
     html += '<div class="profile-row"><div class="fg"><label>Tên chủ tài khoản</label><input value="' + (USER?.bank_holder||'').replace(/"/g,'&quot;') + '" disabled style="opacity:.6"></div></div>';
   } else {
-    html += '<div style="font-size:11px;color:var(--gray);margin-bottom:12px">Nhập lần đầu. Sau khi lưu phải liên hệ CSKH để thay đổi.</div>';
+    html += '<div style="font-size:11px;color:var(--gray);margin-bottom:12px">Nhập lần đầu. Sau khi lưu phải <span style="color:var(--gold);cursor:pointer;text-decoration:underline" onclick="openLiveChat()">liên hệ CSKH</span> để thay đổi.</div>';
     html += '<div class="profile-row"><div class="fg"><label>Số tài khoản</label><input id="pfBankAccount" placeholder="Nhập số tài khoản"></div><div class="fg"><label>Ngân hàng</label><input id="pfBankName" placeholder="VD: Vietcombank, Techcombank..."></div></div>';
     html += '<div class="profile-row"><div class="fg"><label>Tên chủ tài khoản</label><input id="pfBankHolder" placeholder="Tên trên tài khoản ngân hàng"></div><div class="fg"><label>Mật khẩu bảo mật rút tiền</label><input id="pfWithdrawPin" type="password" placeholder="Tối thiểu 4 ký tự"></div></div>';
     html += '<button class="btn btn-p" onclick="saveBankInfo()" style="margin-top:8px">Lưu thông tin ngân hàng</button>';
@@ -1575,17 +1575,17 @@ async function renderProfile() {
   var hasWH = USER?.warehouse_address;
   html += '<div class="profile-section"><h3>Địa chỉ kho</h3>';
   if (hasWH) {
-    html += '<div style="font-size:11px;color:var(--gray);margin-bottom:12px">Đã lưu. Liên hệ CSKH để thay đổi.</div>';
+    html += '<div style="font-size:11px;color:var(--gray);margin-bottom:12px">Đã lưu. <span style="color:var(--gold);cursor:pointer;text-decoration:underline" onclick="openLiveChat()">Liên hệ CSKH</span> để thay đổi.</div>';
     html += '<div style="padding:10px 14px;background:#faf8f5;border-radius:8px;font-size:13px;font-weight:500">' + (USER?.warehouse_address||'') + '</div>';
   } else {
-    html += '<div style="font-size:11px;color:var(--gray);margin-bottom:12px">Nhập lần đầu. Sau khi lưu phải liên hệ CSKH để thay đổi.</div>';
+    html += '<div style="font-size:11px;color:var(--gray);margin-bottom:12px">Nhập lần đầu. Sau khi lưu phải <span style="color:var(--gold);cursor:pointer;text-decoration:underline" onclick="openLiveChat()">liên hệ CSKH</span> để thay đổi.</div>';
     html += '<div class="fg"><label>Địa chỉ nhận hàng</label><input id="pfWarehouse" placeholder="VD: Việt Nam, Nhật Bản, Mỹ..."></div>';
     html += '<button class="btn btn-p" onclick="saveWarehouse()" style="margin-top:8px">Lưu địa chỉ</button>';
   }
   html += '</div>';
 
   html += '<div class="profile-section"><h3>Đổi mật khẩu</h3>';
-  html += '<div style="font-size:12px;color:var(--gray);margin-bottom:4px">Để đổi mật khẩu, vui lòng liên hệ CSKH.</div></div>';
+  html += '<div style="font-size:12px;color:var(--gray);margin-bottom:4px">Để đổi mật khẩu, vui lòng <span style="color:var(--gold);cursor:pointer;text-decoration:underline" onclick="openLiveChat()">liên hệ CSKH</span>.</div></div>';
 
   html += '<div class="profile-section"><h3>Giao dịch gần đây</h3><div class="tbl-wrap"><table><thead><tr><th>Loại</th><th>Số tiền</th><th>Mô tả</th><th>Ngày</th></tr></thead><tbody>';
   if (txns.length) {
