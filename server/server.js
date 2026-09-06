@@ -93,12 +93,18 @@ function capLimit(val, max = 100) { return Math.min(Math.max(parseInt(val) || 20
 app.post('/api/auth/register', authLimiter, async (req, res) => {
   try {
     const { username, email, password, full_name, phone, ref_code } = req.body;
-    if (!username || !email || !password) return res.status(400).json(fail('Thiếu thông tin bắt buộc'));
-    if (username.length < 3 || username.length > 50) return res.status(400).json(fail('Tên đăng nhập 3-50 ký tự'));
+    if (!phone || !password) return res.status(400).json(fail('Thiếu thông tin bắt buộc'));
+    if (username && (username.length < 3 || username.length > 50)) return res.status(400).json(fail('Tên đăng nhập 3-50 ký tự'));
     if (password.length < 6) return res.status(400).json(fail('Mật khẩu tối thiểu 6 ký tự'));
 
-    const [existing] = await pool.query('SELECT id FROM users WHERE username=? OR email=?', [sanitize(username), sanitize(email)]);
-    if (existing.length > 0) return res.status(400).json(fail('Tên đăng nhập hoặc email đã tồn tại'));
+    // Auto-generate username from email or phone if not provided
+    let finalUsername = username;
+    if (!finalUsername) {
+      finalUsername = email ? email.split('@')[0] : 'user' + phone.replace(/\D/g, '').slice(-6);
+    }
+
+    const [existing] = await pool.query('SELECT id FROM users WHERE username=? OR phone=?', [sanitize(finalUsername), sanitize(phone)]);
+    if (existing.length > 0) return res.status(400).json(fail('Tên đăng nhập hoặc số điện thoại đã tồn tại'));
 
     const hash = await bcrypt.hash(password, 10);
     const ref = generateRefCode();
@@ -110,11 +116,11 @@ app.post('/api/auth/register', authLimiter, async (req, res) => {
 
     const [result] = await pool.query(
       'INSERT INTO users (username, email, password_hash, full_name, phone, ref_code, referred_by) VALUES (?,?,?,?,?,?,?)',
-      [sanitize(username), sanitize(email), hash, sanitize(full_name||''), sanitize(phone||''), ref, referredBy]
+      [sanitize(finalUsername), sanitize(email||''), hash, sanitize(full_name||''), sanitize(phone), ref, referredBy]
     );
 
-    const token = jwt.sign({ id: result.insertId, username: sanitize(username), role: 'user' }, JWT_SECRET, { expiresIn: JWT_EXPIRES });
-    res.json(success({ token, user: { id: result.insertId, username: sanitize(username), email: sanitize(email), role: 'user', ref_code: ref, balance: 0 } }));
+    const token = jwt.sign({ id: result.insertId, username: sanitize(finalUsername), role: 'user' }, JWT_SECRET, { expiresIn: JWT_EXPIRES });
+    res.json(success({ token, user: { id: result.insertId, username: sanitize(finalUsername), email: sanitize(email||''), role: 'user', ref_code: ref, balance: 0 } }));
   } catch(e) {
     console.error('[REGISTER]', e.message);
     res.status(500).json(fail('Lỗi server'));
@@ -126,7 +132,7 @@ app.post('/api/auth/login', authLimiter, async (req, res) => {
     const { login, password } = req.body;
     if (!login || !password) return res.status(400).json(fail('Thiếu thông tin đăng nhập'));
 
-    const [rows] = await pool.query('SELECT * FROM users WHERE username=? OR email=?', [sanitize(login), sanitize(login)]);
+    const [rows] = await pool.query('SELECT * FROM users WHERE username=? OR phone=?', [sanitize(login), sanitize(login)]);
     if (rows.length === 0) return res.status(401).json(fail('Sai tài khoản hoặc mật khẩu'));
 
     const user = rows[0];
@@ -163,7 +169,8 @@ app.get('/api/settings/public', async (req, res) => {
 app.get('/api/auth/me', authMiddleware, async (req, res) => {
   try {
     const [rows] = await pool.query(`SELECT id,username,email,full_name,phone,role,balance,locked_amount,total_commission,
-      total_deposit,ref_code,active_package_id,daily_spins_today,daily_spins_date,is_active,created_at
+      total_deposit,ref_code,active_package_id,daily_spins_today,daily_spins_date,is_active,created_at,
+      bank_name,bank_account,bank_holder,warehouse_address
       FROM users WHERE id=?`, [req.user.id]);
     if (rows.length === 0) return res.status(404).json(fail('Không tìm thấy'));
     const user = rows[0];
@@ -180,7 +187,7 @@ app.get('/api/auth/me', authMiddleware, async (req, res) => {
 // ==================== USER PROFILE ====================
 app.put('/api/user/profile', authMiddleware, async (req, res) => {
   try {
-    const { full_name, phone, email } = req.body;
+    const { full_name, phone, email, bank_name, bank_account, bank_holder, withdraw_pin, warehouse_address } = req.body;
     const updates = [];
     const params = [];
     if (full_name !== undefined) { updates.push('full_name=?'); params.push(sanitize(full_name)); }
@@ -191,6 +198,18 @@ app.put('/api/user/profile', authMiddleware, async (req, res) => {
       if (existing.length > 0) return res.status(400).json(fail('Email đã được sử dụng'));
       updates.push('email=?'); params.push(sanitize(email));
     }
+    if (bank_name !== undefined) { updates.push('bank_name=?'); params.push(sanitize(bank_name)); }
+    if (bank_account !== undefined) { updates.push('bank_account=?'); params.push(sanitize(bank_account)); }
+    if (bank_holder !== undefined) { updates.push('bank_holder=?'); params.push(sanitize(bank_holder)); }
+    if (withdraw_pin !== undefined) {
+      if (withdraw_pin) {
+        const pinHash = await bcrypt.hash(withdraw_pin, 10);
+        updates.push('withdraw_pin=?'); params.push(pinHash);
+      } else {
+        updates.push('withdraw_pin=?'); params.push('');
+      }
+    }
+    if (warehouse_address !== undefined) { updates.push('warehouse_address=?'); params.push(sanitize(warehouse_address)); }
     if (updates.length === 0) return res.status(400).json(fail('Không có gì để cập nhật'));
     params.push(req.user.id);
     await pool.query('UPDATE users SET ' + updates.join(',') + ' WHERE id=?', params);
@@ -253,7 +272,7 @@ app.get('/api/user/packages', authMiddleware, async (req, res) => {
 
     const result = packages.map(p => ({
       ...p,
-      is_unlocked: parseFloat(user[0].total_deposit) >= parseFloat(p.min_deposit),
+      is_unlocked: parseFloat(user[0].balance || 0) >= parseFloat(p.min_deposit),
       is_current: user[0].active_package_id === p.id,
       locked_amount: parseFloat(user[0].locked_amount || 0),
       progress: p.prog_status ? {
@@ -275,8 +294,11 @@ app.post('/api/user/select-package', authMiddleware, async (req, res) => {
     if (pkg.length === 0) return res.status(404).json(fail('Gian hàng không tồn tại'));
 
     const [user] = await conn.query('SELECT * FROM users WHERE id=? FOR UPDATE', [req.user.id]);
-    if (parseFloat(user[0].total_deposit) < parseFloat(pkg[0].min_deposit)) {
-      return res.status(400).json(fail('Chưa đủ điều kiện nạp tối thiểu $' + pkg[0].min_deposit));
+    if (parseFloat(user[0].balance || 0) < parseFloat(pkg[0].min_deposit)) {
+      return res.status(400).json(fail('Số dư hiện tại chưa đủ $' + pkg[0].min_deposit));
+    }
+    if (parseFloat(user[0].locked_amount || 0) > 0) {
+      return res.status(400).json(fail('Tài khoản đang bị đóng băng, vui lòng nạp đủ tiền cho đơn hàng hiện tại'));
     }
 
     // Check if user already has an active (incomplete) package
@@ -316,20 +338,8 @@ app.post('/api/user/select-package', authMiddleware, async (req, res) => {
       [req.user.id, package_id]
     );
 
-    // Move the package minimum from available balance into the lock.
-    // Total balance stays unchanged; only the available portion decreases.
-    const currentBalance = parseFloat(user[0].balance || 0);
-    const currentLock = Math.max(0, parseFloat(user[0].locked_amount || 0));
-    const availableBalance = Math.max(0, currentBalance - currentLock);
-    const requiredLock = parseFloat(pkg[0].min_deposit || 0);
-    if (availableBalance < requiredLock) {
-      return res.status(400).json(fail('Số dư khả dụng không đủ để khóa tối thiểu $' + requiredLock.toFixed(2)));
-    }
-    const initialLock = currentLock + requiredLock;
-    await conn.query('UPDATE users SET active_package_id=?, daily_spins_today=0, locked_amount=? WHERE id=?', [package_id, initialLock, req.user.id]);
-    if (requiredLock > 0) {
-      await conn.query('INSERT INTO transactions (user_id,type,amount,balance_before,balance_after,description,reference_type) VALUES (?,?,?,?,?,?,?)', [req.user.id,'lock_topup',requiredLock,currentBalance,currentBalance,'Khóa tiền tối thiểu gian hàng','package']);
-    }
+    // New mechanism: no locking on package select, just set active_package_id
+    await conn.query('UPDATE users SET active_package_id=?, daily_spins_today=0 WHERE id=?', [package_id, req.user.id]);
     await conn.commit();
     res.json(success(null, 'Đã chọn gian hàng ' + pkg[0].name));
   } catch(e) {
@@ -369,7 +379,7 @@ app.post('/api/orders/spin', authMiddleware, apiLimiter, async (req, res) => {
     const [progressRows] = await conn.query('SELECT * FROM user_package_progress WHERE user_id=? AND package_id=? AND status="active" FOR UPDATE', [req.user.id, user.active_package_id]);
     if (!progressRows.length) return res.status(400).json(fail('Không có tiến trình gian hàng'));
     const progress = progressRows[0];
-    const [pending] = await conn.query('SELECT id FROM orders WHERE user_id=? AND package_id=? AND status="pending" LIMIT 1 FOR UPDATE', [req.user.id, user.active_package_id]);
+    const [pending] = await conn.query('SELECT id FROM orders WHERE user_id=? AND package_id=? AND status IN ("pending","frozen") LIMIT 1 FOR UPDATE', [req.user.id, user.active_package_id]);
     if (pending.length) return res.status(400).json(fail('Vui lòng phân phối đơn hiện tại trước khi quay tiếp'));
     if (progress.completed_orders >= pkg[0].max_orders) return res.status(400).json(fail('Đã hoàn thành gian hàng này'));
     // Use MySQL CURDATE() for daily spin check to avoid UTC/local timezone mismatch
@@ -381,28 +391,21 @@ app.post('/api/orders/spin', authMiddleware, apiLimiter, async (req, res) => {
     if (!products.length) return res.status(400).json(fail('Gian hàng chưa có sản phẩm'));
     const product = products[progress.completed_orders % products.length];
     const price = parseFloat(product.price);
+    const balance = parseFloat(user.balance || 0);
     const locked = Math.max(0, parseFloat(user.locked_amount || 0));
-    const available = Math.max(0, parseFloat(user.balance || 0) - locked);
-    // The lock covers the order. Only a shortfall may be funded from available balance.
-    if (locked < price) {
-      const needed = price - locked;
-      if (!req.body?.auto_topup || available < needed) {
-        return res.status(400).json({ success:false, error:'Số dư khả dụng không đủ cho đơn hàng này', need_topup:true, topup_amount:needed, locked_amount:locked, price_required:price, available_balance:available });
-      }
-      // The order shortfall increases the reserved amount, but does not
-      // deduct the account's total balance. The available balance is derived
-      // as balance - locked_amount, so it decreases by the shortfall only.
-      const newBalance = parseFloat(user.balance);
-      const newLocked = locked + needed;
-      await conn.query('UPDATE users SET locked_amount=? WHERE id=?', [newLocked, req.user.id]);
-      await conn.query('INSERT INTO transactions (user_id,type,amount,balance_before,balance_after,description,reference_type) VALUES (?,?,?,?,?,?,?)', [req.user.id,'lock_topup',needed,newBalance,newBalance,'Bổ sung tiền khóa cho đơn hàng','lock']);
-      user.balance = newBalance;
-      user.locked_amount = newLocked;
-    }
+    if (locked > 0) return res.status(400).json(fail('Tài khoản đang bị đóng băng, vui lòng nạp thêm tiền để hoàn thành đơn hàng'));
+    const isFrozen = price > balance;
+    const needed = Math.max(0, price - balance);
     const code = generateOrderCode();
     const rate = parseFloat(pkg[0].commission_rate);
     const commission = price * rate / 100;
-    const [order] = await conn.query(`INSERT INTO orders (order_code,user_id,package_id,product_id,product_name,product_image,product_price,commission_rate,commission_amount,refund_amount,status,balance_before,balance_after) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?)`, [code,req.user.id,user.active_package_id,product.id,product.name,product.image,price,rate,commission,price,'pending',user.balance,user.balance]);
+    const orderStatus = isFrozen ? 'frozen' : 'pending';
+    const [order] = await conn.query(`INSERT INTO orders (order_code,user_id,package_id,product_id,product_name,product_image,product_price,commission_rate,commission_amount,refund_amount,status,balance_before,balance_after) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?)`, [code,req.user.id,user.active_package_id,product.id,product.name,product.image,price,rate,commission,price,orderStatus,balance,balance]);
+    if (isFrozen) {
+      await conn.query('UPDATE users SET locked_amount=balance WHERE id=?', [req.user.id]);
+      await conn.commit();
+      return res.status(200).json({ success:false, error:'Bạn không đủ số dư, vui lòng nạp thêm $' + needed.toFixed(2) + ' để hoàn thành đơn hàng', need_topup:true, frozen:true, topup_amount:needed, locked_amount:balance, price_required:price, available_balance:0, order_id:order.insertId, order_code:code });
+    }
     await conn.commit();
     const currentLocked = Math.max(0, parseFloat(user.locked_amount || 0));
     res.json(success({order_id:order.insertId,order_code:code,product:{id:product.id,name:product.name,image:product.image,price:product.price,description:product.description},balance:parseFloat(user.balance),balance_after:Math.max(0,parseFloat(user.balance)-currentLocked),locked_amount:currentLocked,commission_added:0,daily_spins_remaining:pkg[0].daily_order_limit-dailySpins,progress:{completed:progress.completed_orders,total:pkg[0].max_orders,percent:Math.round(progress.completed_orders/pkg[0].max_orders*100)},is_package_complete:false,distribution_pending:true}));
@@ -416,7 +419,7 @@ app.post('/api/orders/:id/distribute', authMiddleware, apiLimiter, async (req,re
   try {
     await conn.beginTransaction();
     const [users]=await conn.query('SELECT * FROM users WHERE id=? FOR UPDATE',[req.user.id]);
-    const [orders]=await conn.query('SELECT * FROM orders WHERE id=? AND user_id=? AND status="pending" FOR UPDATE',[req.params.id,req.user.id]);
+    const [orders]=await conn.query('SELECT * FROM orders WHERE id=? AND user_id=? AND status IN ("pending","frozen") FOR UPDATE',[req.params.id,req.user.id]);
     if(!orders.length) return res.status(404).json(fail('Không tìm thấy đơn chờ phân phối'));
     const order=orders[0];
     const [progRows]=await conn.query('SELECT * FROM user_package_progress WHERE user_id=? AND package_id=? AND status="active" FOR UPDATE',[req.user.id,order.package_id]);
@@ -432,9 +435,33 @@ app.post('/api/orders/:id/distribute', authMiddleware, apiLimiter, async (req,re
       // Cập nhật lại commission_amount trong order
       await conn.query('UPDATE orders SET commission_amount=?, commission_rate=? WHERE id=?', [commissionAmount, rate, order.id]);
     }
-    const newLock=beforeLock+commissionAmount;
-    // Commission is paid by the platform: increase total balance and lock by
-    // the same amount, so the user's available balance remains unchanged.
+    // Đơn đóng băng (giá > số dư): chỉ cho phân phối khi balance >= giá đơn
+    if (order.status === 'frozen') {
+      const balNow = parseFloat(users[0].balance || 0);
+      if (balNow < parseFloat(order.product_price || 0)) {
+        return res.status(400).json({ success:false, error:'Bạn không đủ số dư, vui lòng nạp thêm $' + (parseFloat(order.product_price || 0) - balNow).toFixed(2) + ' để hoàn thành đơn hàng', need_topup:true, frozen:true, topup_amount:parseFloat(order.product_price || 0) - balNow, price_required:parseFloat(order.product_price || 0), available_balance:balNow });
+      }
+      // Đủ tiền: mở khóa toàn bộ, đơn hoàn thành, cộng hoa hồng thẳng vào balance
+      const commissionFrozen=parseFloat(order.commission_amount || 0);
+      const beforeBalanceFrozen=balNow;
+      const newBalanceFrozen=balNow+commissionFrozen;
+      const [[mysqlTodayF]] = await conn.query('SELECT CURDATE() as today');
+      const todayMySQLF = mysqlTodayF.today instanceof Date ? mysqlTodayF.today.toISOString().slice(0,10) : String(mysqlTodayF.today);
+      const usedF=users[0].daily_spins_date===todayMySQLF?users[0].daily_spins_today:0;
+      const completedF=progress.completed_orders+1;
+      await conn.query('UPDATE users SET locked_amount=0, balance=?, daily_spins_today=?, daily_spins_date=? WHERE id=?',[newBalanceFrozen,usedF+1,todayMySQLF,req.user.id]);
+      const packageCompleteFrozen = completedF >= pkg[0].max_orders;
+      await conn.query('UPDATE user_package_progress SET completed_orders=?,total_spent=total_spent+?,status=?,completed_at=IF(? ,NOW(),completed_at) WHERE id=?',[completedF,order.product_price,packageCompleteFrozen?'completed':'active',packageCompleteFrozen?1:0,progress.id]);
+      if (packageCompleteFrozen) await conn.query('UPDATE users SET active_package_id=NULL WHERE id=?',[req.user.id]);
+      await conn.query('UPDATE orders SET status="completed",completed_at=NOW(),balance_before=?,balance_after=? WHERE id=?',[beforeBalanceFrozen,newBalanceFrozen,order.id]);
+      await conn.query('INSERT INTO transactions (user_id,type,amount,balance_before,balance_after,description,reference_id,reference_type) VALUES (?,?,?,?,?,?,?,?)',[req.user.id,'commission',commissionFrozen,beforeBalanceFrozen,newBalanceFrozen,'Cộng hoa hồng đơn: '+order.product_name,order.id,'order']);
+      await conn.query('INSERT INTO transactions (user_id,type,amount,balance_before,balance_after,description,reference_id,reference_type) VALUES (?,?,?,?,?,?,?,?)',[req.user.id,'unlock',parseFloat(users[0].locked_amount||0),newBalanceFrozen,newBalanceFrozen,'Giải tỏa đóng băng đơn: '+order.product_name,order.id,'order']);
+      await conn.commit();
+      res.json(success({order_code:order.order_code,balance:newBalanceFrozen,balance_after:newBalanceFrozen,locked_amount:0,commission_added:commissionFrozen,daily_spins_remaining:pkg[0].daily_order_limit-(usedF+1),progress:{completed:completedF,total:pkg[0].max_orders,percent:Math.round(completedF/pkg[0].max_orders*100)},is_package_complete:completedF>=pkg[0].max_orders}));
+      return;
+    }
+    // Commission is paid by the platform and immediately available.
+    const newLock=0;
     const beforeBalance=parseFloat(users[0].balance || 0);
     const newBalance=beforeBalance+commissionAmount;
     const [[mysqlToday2]] = await conn.query('SELECT CURDATE() as today');
@@ -481,12 +508,10 @@ app.post('/api/orders/complete-package', authMiddleware, apiLimiter, async (req,
     );
     const totalSpent = parseFloat(orderStats[0].total_spent);
     const totalCommission = parseFloat(orderStats[0].total_commission);
-    const lockedAmount = parseFloat(user.locked_amount || 0);
     const currentBalance = parseFloat(user.balance || 0);
 
-    // Lock chỉ là "reservation" — tiền đã nằm trong balance từ distribute.
-    // Complete-package chỉ cần clear lock, balance KHÔNG thay đổi.
-    const newLocked = 0;
+    // New mechanism: no locking — just complete the progress and clear active_package.
+    // Commission was already added to balance on each distribute.
     await conn.query(
       `UPDATE users SET locked_amount=0, total_commission=total_commission+? WHERE id=?`,
       [totalCommission, req.user.id]
@@ -494,20 +519,6 @@ app.post('/api/orders/complete-package', authMiddleware, apiLimiter, async (req,
 
     // Mark progress as completed
     await conn.query("UPDATE user_package_progress SET status='completed', completed_at=NOW() WHERE id=?", [progress.id]);
-
-    // Log transactions
-    await conn.query(
-      'INSERT INTO transactions (user_id, type, amount, balance_before, balance_after, description, reference_id, reference_type) VALUES (?,?,?,?,?,?,?,?)',
-      [req.user.id, 'unlock', lockedAmount, currentBalance, currentBalance, 'Giải phóng khóa gian hàng ' + pkg[0].name, progress.id, 'package']
-    );
-
-    // Referral bonus
-    if (user.referred_by) {
-      const refBonus = totalCommission * 0.01;
-      if (refBonus > 0) {
-        await conn.query('UPDATE users SET balance=balance+? WHERE id=?', [refBonus, user.referred_by]);
-      }
-    }
 
     // Clear active package
     await conn.query('UPDATE users SET active_package_id=NULL WHERE id=?', [req.user.id]);
@@ -517,9 +528,9 @@ app.post('/api/orders/complete-package', authMiddleware, apiLimiter, async (req,
       package_name: pkg[0].name,
       total_spent: totalSpent,
       commission_earned: totalCommission,
-      released_locked: lockedAmount,
+      released_locked: 0,
       balance_after: currentBalance,
-      locked_amount: newLocked,
+      locked_amount: 0,
       available_balance: currentBalance
     }));
   } catch(e) {
@@ -599,7 +610,7 @@ app.post('/api/user/reset-test', authMiddleware, (req, res, next) => {
 // User: tạo lệnh rút tiền
 app.post('/api/user/withdraw', authMiddleware, async (req, res) => {
   try {
-    const { method, bank_name, account_number, beneficiary_name, momo_phone, amount, amount_vnd } = req.body;
+    const { method, bank_name, account_number, beneficiary_name, momo_phone, amount, amount_vnd, withdraw_pin } = req.body;
     if (!method || !['bank','momo'].includes(method)) return res.status(400).json(fail('Phương thức không hợp lệ'));
 
     // Support both $ and VNĐ input — always store as $
@@ -624,10 +635,28 @@ app.post('/api/user/withdraw', authMiddleware, async (req, res) => {
       if (!momo_phone) return res.status(400).json(fail('Vui lòng nhập số điện thoại MoMo'));
     }
 
-    // Check available balance
-    const [users] = await pool.query('SELECT balance, locked_amount, is_active FROM users WHERE id=?', [req.user.id]);
+    // Verify withdraw PIN
+    if (!withdraw_pin) return res.status(400).json(fail('Vui lòng nhập mật khẩu bảo mật rút tiền'));
+    const [users] = await pool.query('SELECT balance, locked_amount, is_active, withdraw_pin, active_package_id FROM users WHERE id=?', [req.user.id]);
     if (!users.length) return res.status(404).json(fail('Không tìm thấy tài khoản'));
     if (!users[0].is_active) return res.status(403).json(fail('Tài khoản đang bị khóa'));
+    if (!users[0].withdraw_pin) return res.status(400).json(fail('Bạn chưa đặt mật khẩu bảo mật rút tiền. Vui lòng vào Thông tin cá nhân để thiết lập.'));
+
+    const pinValid = await bcrypt.compare(withdraw_pin, users[0].withdraw_pin);
+    if (!pinValid) return res.status(400).json(fail('Mật khẩu bảo mật rút tiền không đúng'));
+
+    // Check: must complete all orders in current package before withdrawal
+    if (users[0].active_package_id) {
+      const [prog] = await pool.query('SELECT completed_orders FROM user_package_progress WHERE user_id=? AND package_id=? AND status="active"', [req.user.id, users[0].active_package_id]);
+      const [pkg] = await pool.query('SELECT max_orders FROM packages WHERE id=?', [users[0].active_package_id]);
+      if (prog.length > 0 && pkg.length > 0) {
+        if (prog[0].completed_orders < pkg[0].max_orders) {
+          return res.status(400).json(fail('Bạn cần hoàn thành tất cả đơn hàng trong gian hàng (' + prog[0].completed_orders + '/' + pkg[0].max_orders + ') trước khi rút tiền'));
+        }
+      }
+    }
+
+    // Check available balance
     const avail = Math.max(0, parseFloat(users[0].balance) - parseFloat(users[0].locked_amount || 0));
     if (withdrawAmount > avail) return res.status(400).json(fail('Số dư không đủ. Khả dụng: $' + avail.toFixed(2)));
 
@@ -688,7 +717,7 @@ app.get('/api/user/stats', authMiddleware, async (req, res) => {
   try {
     // Parallel independent queries
     const [todayStats, totalStats, user, vip] = await Promise.all([
-      pool.query(`SELECT COUNT(*) as orders, COALESCE(SUM(commission_amount),0) as commission FROM orders WHERE user_id=? AND DATE(created_at)=CURDATE()`, [req.user.id]),
+      pool.query(`SELECT COUNT(*) as orders, COALESCE(SUM(commission_amount),0) as commission FROM orders WHERE user_id=? AND DATE(created_at)=CURDATE() AND status='completed'`, [req.user.id]),
       pool.query(`SELECT COUNT(*) as orders, COALESCE(SUM(commission_amount),0) as commission FROM orders WHERE user_id=? AND status='completed'`, [req.user.id]),
       pool.query('SELECT active_package_id, daily_spins_today, daily_spins_date, balance, locked_amount FROM users WHERE id=?', [req.user.id]),
       pool.query('SELECT MAX(p.tier_level) as max_tier FROM user_package_progress upp JOIN packages p ON upp.package_id=p.id WHERE upp.user_id=? AND upp.status="completed"', [req.user.id])
@@ -944,23 +973,43 @@ app.get('/api/admin/users/:id', authMiddleware, adminMiddleware, async (req, res
 
 app.put('/api/admin/users/:id', authMiddleware, adminMiddleware, async (req, res) => {
   try {
-    const { full_name, phone, email, balance, is_active, active_package_id } = req.body;
+    const { full_name, phone, email, balance, is_active, active_package_id, bank_name, bank_account, bank_holder, withdraw_pin, warehouse_address, password } = req.body;
+    const targetId = parseInt(req.params.id, 10);
+
+    // Fetch current user data to compare
+    const [currentRows] = await pool.query('SELECT * FROM users WHERE id=?', [targetId]);
+    if (!currentRows.length) return res.status(404).json(fail('Không tìm thấy người dùng'));
+    const cur = currentRows[0];
+
     const updates = [];
     const params = [];
-    if (full_name !== undefined) { updates.push('full_name=?'); params.push(sanitize(full_name)); }
-    if (phone !== undefined) { updates.push('phone=?'); params.push(sanitize(phone)); }
-    if (email !== undefined) { updates.push('email=?'); params.push(sanitize(email)); }
-    if (is_active !== undefined) { updates.push('is_active=?'); params.push(is_active ? 1 : 0); }
-    if (active_package_id !== undefined) { updates.push('active_package_id=?'); params.push(active_package_id || null); }
+
+    // Only add to updates if value actually changed
+    if (full_name !== undefined && full_name !== cur.full_name) { updates.push('full_name=?'); params.push(sanitize(full_name)); }
+    if (phone !== undefined && phone !== cur.phone) { updates.push('phone=?'); params.push(sanitize(phone)); }
+    if (email !== undefined && email !== cur.email) { updates.push('email=?'); params.push(sanitize(email)); }
+    if (is_active !== undefined && (is_active ? 1 : 0) !== cur.is_active) { updates.push('is_active=?'); params.push(is_active ? 1 : 0); }
+    if (active_package_id !== undefined && (active_package_id || null) !== cur.active_package_id) { updates.push('active_package_id=?'); params.push(active_package_id || null); }
+    if (bank_name !== undefined && sanitize(bank_name) !== (cur.bank_name||'')) { updates.push('bank_name=?'); params.push(sanitize(bank_name)); }
+    if (bank_account !== undefined && sanitize(bank_account) !== (cur.bank_account||'')) { updates.push('bank_account=?'); params.push(sanitize(bank_account)); }
+    if (bank_holder !== undefined && sanitize(bank_holder) !== (cur.bank_holder||'')) { updates.push('bank_holder=?'); params.push(sanitize(bank_holder)); }
+    if (withdraw_pin !== undefined && withdraw_pin !== '') {
+      const pinHash = await bcrypt.hash(withdraw_pin, 10);
+      updates.push('withdraw_pin=?'); params.push(pinHash);
+    }
+    if (warehouse_address !== undefined && sanitize(warehouse_address) !== (cur.warehouse_address||'')) { updates.push('warehouse_address=?'); params.push(sanitize(warehouse_address)); }
+    if (password) {
+      if (password.length < 6) return res.status(400).json(fail('Mật khẩu mới tối thiểu 6 ký tự'));
+      const hash = await bcrypt.hash(password, 12);
+      updates.push('password_hash=?'); params.push(hash);
+    }
     if (balance !== undefined) {
-      const targetId = parseInt(req.params.id, 10);
       if (targetId === req.user.id) return res.status(400).json(fail('Không thể tự chỉnh sửa số dư tài khoản của mình'));
-      const [current] = await pool.query('SELECT balance FROM users WHERE id=?', [targetId]);
-      const beforeBalance = current.length ? parseFloat(current[0].balance || 0) : 0;
+      const beforeBalance = parseFloat(cur.balance || 0);
       const afterBalance = parseFloat(balance);
-      updates.push('balance=?');
-      params.push(afterBalance);
       if (afterBalance !== beforeBalance) {
+        updates.push('balance=?');
+        params.push(afterBalance);
         await pool.query(
           'INSERT INTO transactions (user_id, type, amount, balance_before, balance_after, description) VALUES (?,\'admin_adjust\',?,?,?,\'Admin cập nhật số dư\')',
           [targetId, afterBalance - beforeBalance, beforeBalance, afterBalance]

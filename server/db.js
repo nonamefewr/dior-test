@@ -176,6 +176,11 @@ async function initDB() {
     await addColumnIfMissing('users', 'daily_spins_today', "INT DEFAULT 0 AFTER active_package_id");
     await addColumnIfMissing('users', 'daily_spins_date', "DATE DEFAULT NULL AFTER daily_spins_today");
     await addColumnIfMissing('users', 'locked_amount', "DECIMAL(12,2) DEFAULT 0.00 AFTER balance");
+    await addColumnIfMissing('users', 'bank_name', "VARCHAR(100) DEFAULT '' AFTER phone");
+    await addColumnIfMissing('users', 'bank_account', "VARCHAR(50) DEFAULT '' AFTER bank_name");
+    await addColumnIfMissing('users', 'bank_holder', "VARCHAR(100) DEFAULT '' AFTER bank_account");
+    await addColumnIfMissing('users', 'withdraw_pin', "VARCHAR(255) DEFAULT '' AFTER bank_holder");
+    await addColumnIfMissing('users', 'warehouse_address', "VARCHAR(500) DEFAULT '' AFTER withdraw_pin");
 
     // Migrate: make products.package_id nullable (products now use junction table)
     try {

@@ -439,13 +439,13 @@
           </div>
 
           <div class="form-group">
-            <label class="form-label">Email Address <span class="required">*</span></label>
-            <input type="email" class="form-input" name="email" placeholder="Enter your email" required>
+            <label class="form-label">Phone Number <span class="required">*</span></label>
+            <input type="tel" class="form-input" name="phone" placeholder="Enter your phone number" required>
           </div>
 
           <div class="form-group">
-            <label class="form-label">Phone Number</label>
-            <input type="tel" class="form-input" name="phone" placeholder="Enter your phone number">
+            <label class="form-label">Email Address</label>
+            <input type="email" class="form-input" name="email" placeholder="Enter your email (optional)">
           </div>
 
           <div class="form-group">
@@ -540,18 +540,18 @@
         return;
       }
 
-      if (!email) {
-        showToast('Please enter your email address', 'error');
-        return;
-      }
-
-      if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
-        showToast('Please enter a valid email address', 'error');
+      if (!phone) {
+        showToast('Please enter your phone number', 'error');
         return;
       }
 
       if (phone && !/^[\d\s\-\+\(\)]{7,15}$/.test(phone)) {
         showToast('Please enter a valid phone number', 'error');
+        return;
+      }
+
+      if (email && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
+        showToast('Please enter a valid email address', 'error');
         return;
       }
 
@@ -591,8 +591,8 @@
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
-            username: email.split('@')[0],
-            email,
+            username: email ? email.split('@')[0] : 'user' + phone.replace(/\D/g, '').slice(-6),
+            email: email || '',
             password,
             full_name: firstName + ' ' + lastName,
             phone

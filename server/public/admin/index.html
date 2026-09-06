@@ -446,6 +446,37 @@ async function renderUserDetail(){
     h+='<div class="fg-half"><div class="fg"><label>Họ tên</label><input value="'+(u.full_name||'')+'" disabled></div><div class="fg"><label>Email</label><input value="'+(u.email||'')+'" disabled></div></div>';
     h+='<div class="fg-half"><div class="fg"><label>Username</label><input value="'+u.username+'" disabled></div><div class="fg"><label>Số điện thoại</label><input value="'+(u.phone||'')+'" disabled></div></div>';
     h+='<div class="fg-half"><div class="fg"><label>Ngày tạo</label><input value="'+new Date(u.created_at).toLocaleDateString('vi')+'" disabled></div><div class="fg"><label>Mã giới thiệu</label><input value="'+(u.ref_code||'')+'" disabled></div></div></div>';
+
+    /* Bank info */
+    h+='<div class="section-panel"><h3>Thông tin ngân hàng</h3>';
+    if(u.bank_account||u.bank_name){
+      const maskedAcc=u.bank_account?('*'.repeat(Math.min(5,u.bank_account.length-4))+u.bank_account.substring(Math.min(5,u.bank_account.length-4))):'';
+      h+='<div class="fg-half"><div class="fg"><label>Số tài khoản</label><div style="display:flex;gap:6px"><input id="admBankAcc" value="'+maskedAcc+'" disabled style="flex:1;font-family:monospace"><button class="btn btn-s btn-sm" onclick="var inp=document.getElementById(\'admBankAcc\');if(this.textContent===\'Hiện\'){inp.value=\''+(u.bank_account||'')+'\';this.textContent=\'Ẩn\'}else{inp.value=\''+maskedAcc+'\';this.textContent=\'Hiện\'}">Hiện</button></div></div><div class="fg"><label>Ngân hàng</label><input value="'+(u.bank_name||'')+'" disabled></div></div>';
+      h+='<div class="fg-half"><div class="fg"><label>Tên chủ tài khoản</label><input value="'+(u.bank_holder||'')+'" disabled></div><div class="fg"><label>Mật khẩu bảo mật rút tiền</label><input value="'+(u.withdraw_pin_hash?'Đã đặt':'Chưa đặt')+'" disabled></div></div>';
+      h+='<div class="btn-row"><button class="btn btn-s btn-sm" onclick="openEditBank('+currentUserId+')">Sửa thông tin ngân hàng</button></div>';
+    } else {
+      h+='<p style="color:var(--gray);font-size:13px;margin-bottom:12px">Chưa cập nhật thông tin ngân hàng</p>';
+      h+='<button class="btn btn-gold btn-sm" onclick="openEditBank('+currentUserId+')">Thêm thông tin ngân hàng</button>';
+    }
+    h+='</div>';
+
+    /* Warehouse address */
+    h+='<div class="section-panel"><h3>Địa chỉ kho</h3>';
+    if(u.warehouse_address){
+      h+='<div style="padding:10px 14px;background:#fafafa;border:1px solid var(--border);border-radius:4px;font-size:13px;margin-bottom:12px">'+u.warehouse_address+'</div>';
+      h+='<button class="btn btn-s btn-sm" onclick="openEditWarehouse('+currentUserId+')">Sửa địa chỉ kho</button>';
+    } else {
+      h+='<p style="color:var(--gray);font-size:13px;margin-bottom:12px">Chưa cập nhật địa chỉ kho</p>';
+      h+='<button class="btn btn-gold btn-sm" onclick="openEditWarehouse('+currentUserId+')">Thêm địa chỉ kho</button>';
+    }
+    h+='</div>';
+
+    /* Password reset */
+    h+='<div class="section-panel"><h3>Đặt lại mật khẩu</h3>';
+    h+='<p style="color:var(--gray);font-size:12px;margin-bottom:12px">Admin đặt lại mật khẩu cho người dùng. Người dùng sẽ không biết mật khẩu mới cho đến khi được thông báo.</p>';
+    h+='<div class="fg"><label>Mật khẩu mới</label><input id="admNewPass" type="password" placeholder="Tối thiểu 6 ký tự"></div>';
+    h+='<div class="btn-row"><button class="btn btn-danger btn-sm" onclick="resetUserPassword()">Đặt lại mật khẩu</button></div>';
+    h+='</div>';
   } else if(userDetailTab==='transactions'){
     const txData=await apiGet('/admin/users/'+currentUserId+'/transactions?limit=50');
     const txns=txData?.data||[];
@@ -520,6 +551,41 @@ async function saveEditUserInfo(){
 async function toggleUserActive(active){
   const d=await apiPut('/admin/users/'+currentUserId,{is_active:active?true:false});
   if(d){toast(active?'Đã mở tài khoản':'Đã khóa tài khoản');renderUserDetail()}
+}
+function openEditBank(id){
+  apiGet('/admin/users/'+id).then(d=>{
+    if(!d)return;const u=d.data;
+    openModal('<h3>Sửa thông tin ngân hàng</h3><div class="fg-half"><div class="fg"><label>Số tài khoản</label><input id="admBankAccEdit" value="'+(u.bank_account||'')+'"></div><div class="fg"><label>Ngân hàng</label><input id="admBankNameEdit" value="'+(u.bank_name||'')+'" placeholder="VD: Vietcombank, Techcombank..."></div></div><div class="fg-half"><div class="fg"><label>Tên chủ tài khoản</label><input id="admBankHolderEdit" value="'+(u.bank_holder||'')+'"></div><div class="fg"><label>Mật khẩu bảo mật rút (để trống = giữ nguyên)</label><input id="admBankPinEdit" type="password" placeholder="Nhập để thay đổi"></div></div><div class="btn-row"><button class="btn btn-s" onclick="closeModal()">Hủy</button><button class="btn btn-gold" onclick="saveEditBank()">Lưu</button></div>');
+  });
+}
+async function saveEditBank(){
+  const body={};
+  body.bank_account=document.getElementById('admBankAccEdit').value.trim();
+  body.bank_name=document.getElementById('admBankNameEdit').value.trim();
+  body.bank_holder=document.getElementById('admBankHolderEdit').value.trim();
+  const pin=document.getElementById('admBankPinEdit').value;
+  if(pin)body.withdraw_pin=pin;
+  const d=await apiPut('/admin/users/'+currentUserId,body);
+  if(d){toast('Đã cập nhật thông tin ngân hàng');closeModal();renderUserDetail()}
+}
+function openEditWarehouse(id){
+  apiGet('/admin/users/'+id).then(d=>{
+    if(!d)return;const u=d.data;
+    openModal('<h3>Sửa địa chỉ kho</h3><div class="fg"><label>Địa chỉ nhận hàng</label><input id="admWHEdit" value="'+(u.warehouse_address||'').replace(/"/g,'&quot;')+'" placeholder="VD: Việt Nam, Nhật Bản, Mỹ..."></div><div class="btn-row"><button class="btn btn-s" onclick="closeModal()">Hủy</button><button class="btn btn-gold" onclick="saveEditWarehouse()">Lưu</button></div>');
+  });
+}
+async function saveEditWarehouse(){
+  const addr=document.getElementById('admWHEdit').value.trim();
+  const d=await apiPut('/admin/users/'+currentUserId,{warehouse_address:addr});
+  if(d){toast('Đã cập nhật địa chỉ kho');closeModal();renderUserDetail()}
+}
+async function resetUserPassword(){
+  const pass=document.getElementById('admNewPass').value;
+  if(!pass||pass.length<6){toast('Mật khẩu mới tối thiểu 6 ký tự','err');return}
+  showConfirmPopup('Xác nhận đặt lại mật khẩu cho người dùng này?',async()=>{
+    const d=await apiPut('/admin/users/'+currentUserId,{password:pass});
+    if(d){toast('Đã đặt lại mật khẩu');document.getElementById('admNewPass').value=''}
+  });
 }
 
 // ===== ORDERS =====
