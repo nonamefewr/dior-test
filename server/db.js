@@ -20,19 +20,30 @@ async function initDB() {
     await conn.query(`CREATE TABLE IF NOT EXISTS users (
       id INT AUTO_INCREMENT PRIMARY KEY,
       username VARCHAR(50) UNIQUE NOT NULL,
-      email VARCHAR(100) UNIQUE NOT NULL,
+      email VARCHAR(100) DEFAULT '',
       password_hash VARCHAR(255) NOT NULL,
       full_name VARCHAR(100) DEFAULT '',
       phone VARCHAR(20) DEFAULT '',
       role ENUM('user','admin') DEFAULT 'user',
       balance DECIMAL(12,2) DEFAULT 0.00,
+      locked_amount DECIMAL(12,2) DEFAULT 0.00,
       total_commission DECIMAL(12,2) DEFAULT 0.00,
       total_deposit DECIMAL(12,2) DEFAULT 0.00,
       ref_code VARCHAR(20) UNIQUE NOT NULL,
       referred_by INT DEFAULT NULL,
       active_package_id INT DEFAULT NULL,
+      current_order_num INT DEFAULT 0,
+      lock_order_start INT DEFAULT NULL,
+      lock_order_end INT DEFAULT NULL,
+      lock_order_value DECIMAL(12,2) DEFAULT 0.00,
+      pending_lock_order_id INT DEFAULT NULL,
       daily_spins_today INT DEFAULT 0,
       daily_spins_date DATE DEFAULT NULL,
+      bank_name VARCHAR(100) DEFAULT '',
+      bank_account VARCHAR(50) DEFAULT '',
+      bank_holder VARCHAR(100) DEFAULT '',
+      withdraw_pin VARCHAR(255) DEFAULT '',
+      warehouse_address VARCHAR(500) DEFAULT '',
       is_active TINYINT(1) DEFAULT 1,
       created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
       updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
@@ -101,6 +112,8 @@ async function initDB() {
       commission_rate DECIMAL(5,2) DEFAULT 0.00,
       commission_amount DECIMAL(12,2) DEFAULT 0.00,
       refund_amount DECIMAL(12,2) DEFAULT 0.00,
+      order_num INT DEFAULT 0,
+      lock_status ENUM('normal','lock','pending_deposit') DEFAULT 'normal',
       status ENUM('pending','completed','cancelled','frozen') DEFAULT 'pending',
       balance_before DECIMAL(12,2) DEFAULT 0.00,
       balance_after DECIMAL(12,2) DEFAULT 0.00,
@@ -181,6 +194,15 @@ async function initDB() {
     await addColumnIfMissing('users', 'bank_holder', "VARCHAR(100) DEFAULT '' AFTER bank_account");
     await addColumnIfMissing('users', 'withdraw_pin', "VARCHAR(255) DEFAULT '' AFTER bank_holder");
     await addColumnIfMissing('users', 'warehouse_address', "VARCHAR(500) DEFAULT '' AFTER withdraw_pin");
+    // Lock order fields
+    await addColumnIfMissing('users', 'current_order_num', "INT DEFAULT 0 AFTER daily_spins_date");
+    await addColumnIfMissing('users', 'lock_order_start', "INT DEFAULT NULL AFTER current_order_num");
+    await addColumnIfMissing('users', 'lock_order_end', "INT DEFAULT NULL AFTER lock_order_start");
+    await addColumnIfMissing('users', 'lock_order_value', "DECIMAL(12,2) DEFAULT 0.00 AFTER lock_order_end");
+    await addColumnIfMissing('users', 'pending_lock_order_id', "INT DEFAULT NULL AFTER lock_order_value");
+    // Orders: lock fields
+    await addColumnIfMissing('orders', 'order_num', "INT DEFAULT 0 AFTER refund_amount");
+    await addColumnIfMissing('orders', 'lock_status', "ENUM('normal','lock','pending_deposit') DEFAULT 'normal' AFTER order_num");
 
     // Migrate: make products.package_id nullable (products now use junction table)
     try {
@@ -238,6 +260,19 @@ async function initDB() {
     for (const idx of indexes) {
       try { await conn.query(idx); } catch(e) { /* ignore if exists */ }
     }
+
+    // ===== MIGRATE: Update package prices =====
+    try {
+      await pool.query("UPDATE packages SET min_deposit=200 WHERE slug='bac' OR name LIKE '%Bạc%'");
+      await pool.query("UPDATE packages SET min_deposit=1000 WHERE slug='vang' OR name LIKE '%Vàng%'");
+      await pool.query("UPDATE packages SET min_deposit=3000 WHERE slug='bach-kim' OR name LIKE '%Bạch kim%'");
+      await pool.query("UPDATE packages SET min_deposit=5000 WHERE slug='kim-cuong' OR name LIKE '%Kim cương%'");
+    } catch(e) { /* ignore */ }
+
+    // ===== MIGRATE: Make products shared (remove package_id dependency) =====
+    try {
+      await pool.query("UPDATE products SET package_id=NULL WHERE package_id IS NOT NULL");
+    } catch(e) { /* ignore */ }
 
     console.log('[DB] Tables initialized successfully');
   } finally {

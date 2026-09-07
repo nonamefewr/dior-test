@@ -488,15 +488,10 @@ const API_BASE = '/api';
 let TOKEN = localStorage.getItem('dior_token') || '';
 let USER = null;
 let EXCHANGE_RATE = 27000;
-let CURRENCY = localStorage.getItem('dior_currency') || 'USD'; // 'USD' or 'VND'
 
-// Currency formatting helper
+// Currency formatting helper — always USD
 function fmtMoney(usd) {
   const v = parseFloat(usd || 0);
-  if (CURRENCY === 'VND') {
-    const vnd = Math.round(v * EXCHANGE_RATE);
-    return vnd.toLocaleString('vi-VN') + 'đ';
-  }
   return '$' + v.toFixed(2);
 }
 function maskBankAccount(acc) {
@@ -515,12 +510,6 @@ function toggleBankAcc() {
     input.value = maskBankAccount(USER?.bank_account || '');
     btn.textContent = 'Hiện';
   }
-}
-function toggleCurrency() {
-  CURRENCY = CURRENCY === 'USD' ? 'VND' : 'USD';
-  localStorage.setItem('dior_currency', CURRENCY);
-  // Re-render current page
-  if (currentPage && typeof showPage === 'function') showPage(currentPage);
 }
 async function loadExchangeRate() {
   try {
@@ -646,8 +635,11 @@ async function doLogin() {
     document.getElementById('lgErr').textContent = 'Không kết nối được server';
   }
 }
-// Init LiveChat from API on page load
-(function(){
+// Init LiveChat from API — only when logged in
+var __lc_loaded = false;
+function initLiveChat() {
+  if (__lc_loaded) return;
+  __lc_loaded = true;
   fetch('/api/settings/public').then(r=>r.json()).then(d=>{
     const license = d?.data?.livechat_license || '19928399';
     window.__lc = window.__lc || {};
@@ -656,15 +648,17 @@ async function doLogin() {
     window.__lc.product_name = "livechat";
     (function(n,t,c){function i(n){return e._h?e._h.apply(null,n):e._q.push(n)}var e={_q:[],_h:null,_v:"2.0",on:function(){i(["on",c.call(arguments)])},once:function(){i(["once",c.call(arguments)])},off:function(){i(["off",c.call(arguments)])},get:function(){if(!e._h)throw new Error("[LiveChatWidget] You can't use getters before load.");return i(["get",c.call(arguments)])},call:function(){i(["call",c.call(arguments)])},init:function(){var n=t.createElement("script");n.async=!0,n.type="text/javascript";n.src="https://cdn.livechatinc.com/tracking.js";t.head.appendChild(n)}};!n.__lc.asyncInit&&e.init(),n.LiveChatWidget=n.LiveChatWidget||e})(window,document,[].slice);
   }).catch(()=>{});
-})();
+}
 
 var __lc_just_opened = false;
 function openLiveChat() {
+  if (!TOKEN) { toast('Vui lòng đăng nhập để sử dụng LiveChat', 'err'); return; }
   __lc_just_opened = true;
   setTimeout(function(){ __lc_just_opened = false; }, 200);
   if (window.LiveChatWidget) {
     LiveChatWidget.call('maximize');
   } else {
+    initLiveChat();
     toast('Đang tải LiveChat...', 'ok');
   }
 }
@@ -699,6 +693,7 @@ function initApp() {
   document.getElementById('appPage').style.display = 'block';
   document.querySelectorAll('.bnav-item,.bnav-center').forEach(n=>n.classList.remove('active'));
   document.querySelector('.bnav-item').classList.add('active');
+  initLiveChat();
   showPage('home', document.querySelector('.bnav-item'));
   connectWS();
   /* Balance refresh: use WebSocket push when available, fallback to polling every 60s */
@@ -728,8 +723,7 @@ async function refreshStats() {
 function renderHomeStats(s, vipLevel) {
   const locked = parseFloat(s.locked_amount || 0);
   const avail = s.available_balance !== undefined ? Math.max(0, parseFloat(s.available_balance)) : Math.max(0, parseFloat(s.balance || 0) - locked);
-  const currLabel = CURRENCY === 'VND' ? 'USD' : 'VND';
-  let h = '<div style="display:flex;justify-content:flex-end;margin-bottom:4px"><button onclick="toggleCurrency()" style="background:rgba(201,169,110,.12);border:1px solid rgba(201,169,110,.25);color:var(--gold);padding:3px 10px;border-radius:12px;font-size:11px;cursor:pointer;font-weight:600">' + CURRENCY + ' ↔ ' + currLabel + '</button></div>';
+  let h = '';
   h += '<div class="home-balance"><div class="balance-display"><div class="bal-label">Số dư khả dụng</div><div class="bal-amount">' + fmtMoney(avail) + '</div></div><button class="btn btn-gold btn-sm" onclick="openLiveChat()">Nạp tiền</button><button class="btn btn-s btn-sm" onclick="openWithdrawModal()">Rút tiền</button></div>';
   if (locked > 0) {
     h += '<div style="max-width:380px;margin:0 auto 12px;padding:8px 14px;background:linear-gradient(135deg,rgba(201,169,110,.08),rgba(201,169,110,.03));border:1px solid rgba(201,169,110,.15);border-radius:8px;display:flex;justify-content:space-between;align-items:center;font-size:12px"><span style="color:var(--gray)">Tiền đang đóng băng</span><span style="font-weight:700;color:var(--gold)">' + fmtMoney(locked) + '</span></div>';
@@ -1564,7 +1558,7 @@ async function renderProfile() {
 
   html += '<div id="profileDetail">';
   html += '<div class="profile-section"><h3>Thông tin cá nhân</h3>';
-  html += '<div class="profile-row"><div class="fg"><label>Họ tên</label><input id="pfName" value="' + (USER?.full_name||'').replace(/"/g,'&quot;') + '"></div><div class="fg"><label>Email</label><input value="' + (USER?.email||'') + '" disabled style="opacity:.6"></div></div>';
+  html += '<div class="profile-row"><div class="fg"><label>Họ tên</label><input id="pfName" value="' + (USER?.full_name||'').replace(/"/g,'&quot;') + '"></div><div class="fg"><label>Mã mời</label><input value="' + (USER?.ref_code||'') + '" disabled style="opacity:.6;font-weight:700;letter-spacing:2px"></div></div>';
   html += '<div class="profile-row"><div class="fg"><label>Số điện thoại</label><input value="' + (USER?.phone||'').replace(/"/g,'&quot;') + '" disabled style="opacity:.6"></div><div class="fg"><label>Username</label><input value="' + (USER?.username||'') + '" disabled style="opacity:.6"></div></div>';
   html += '<div style="font-size:11px;color:var(--gray);margin-bottom:10px">Chỉ có thể thay đổi họ tên. Đổi email, SĐT vui lòng <span style="color:var(--gold);cursor:pointer;text-decoration:underline" onclick="openLiveChat()">liên hệ CSKH</span>.</div>';
   html += '<button class="btn btn-p" onclick="saveProfile()" style="margin-top:4px">Lưu thay đổi</button></div>';

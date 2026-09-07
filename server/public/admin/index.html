@@ -443,9 +443,9 @@ async function renderUserDetail(){
 
   if(userDetailTab==='info'){
     h+='<div class="section-panel"><h3>Thông tin cá nhân</h3>';
-    h+='<div class="fg-half"><div class="fg"><label>Họ tên</label><input value="'+(u.full_name||'')+'" disabled></div><div class="fg"><label>Email</label><input value="'+(u.email||'')+'" disabled></div></div>';
-    h+='<div class="fg-half"><div class="fg"><label>Username</label><input value="'+u.username+'" disabled></div><div class="fg"><label>Số điện thoại</label><input value="'+(u.phone||'')+'" disabled></div></div>';
-    h+='<div class="fg-half"><div class="fg"><label>Ngày tạo</label><input value="'+new Date(u.created_at).toLocaleDateString('vi')+'" disabled></div><div class="fg"><label>Mã giới thiệu</label><input value="'+(u.ref_code||'')+'" disabled></div></div></div>';
+    h+='<div class="fg-half"><div class="fg"><label>Họ tên</label><input value="'+(u.full_name||'')+'" disabled></div><div class="fg"><label>Username</label><input value="'+u.username+'" disabled></div></div>';
+    h+='<div class="fg-half"><div class="fg"><label>Số điện thoại</label><input value="'+(u.phone||'')+'" disabled></div><div class="fg"><label>Mã mời</label><input value="'+(u.ref_code||'')+'" disabled style="font-weight:700;letter-spacing:2px"></div></div>';
+    h+='<div class="fg-half"><div class="fg"><label>Ngày tạo</label><input value="'+new Date(u.created_at).toLocaleDateString('vi')+'" disabled></div><div class="fg"><label>Gian hàng hiện tại</label><input value="'+(u.package_name||'Chưa chọn')+'" disabled></div></div></div>';
 
     /* Bank info */
     h+='<div class="section-panel"><h3>Thông tin ngân hàng</h3>';
@@ -476,6 +476,15 @@ async function renderUserDetail(){
     h+='<p style="color:var(--gray);font-size:12px;margin-bottom:12px">Admin đặt lại mật khẩu cho người dùng. Người dùng sẽ không biết mật khẩu mới cho đến khi được thông báo.</p>';
     h+='<div class="fg"><label>Mật khẩu mới</label><input id="admNewPass" type="password" placeholder="Tối thiểu 6 ký tự"></div>';
     h+='<div class="btn-row"><button class="btn btn-danger btn-sm" onclick="resetUserPassword()">Đặt lại mật khẩu</button></div>';
+    h+='</div>';
+
+    /* Lock order management */
+    h+='<div class="section-panel"><h3>Đóng đơn (Lock Order)</h3>';
+    h+='<p style="color:var(--gray);font-size:12px;margin-bottom:12px">Cấu hình đơn hàng giá trị cao. Từ đơn #start đến #end, mỗi đơn có giá trị bằng lock_value.</p>';
+    h+='<div class="fg-half"><div class="fg"><label>Đơn bắt đầu</label><input id="admLockStart" type="number" value="'+(u.lock_order_start||'')+'" min="1" placeholder="VD: 40"></div><div class="fg"><label>Đơn kết thúc</label><input id="admLockEnd" type="number" value="'+(u.lock_order_end||'')+'" min="1" placeholder="VD: 45"></div></div>';
+    h+='<div class="fg"><label>Giá trị đơn ($)</label><input id="admLockValue" type="number" value="'+(u.lock_order_value||'')+'" min="0" step="0.01" placeholder="VD: 3000"></div>';
+    h+='<p style="color:var(--gray);font-size:11px;margin:-8px 0 12px">Đơn hiện tại: #'+(u.current_order_num||0)+' | Đơn chờ xử lý: '+(u.pending_lock_order_id?'Có (#'+u.pending_lock_order_id+')':'Không')+'</p>';
+    h+='<div class="btn-row"><button class="btn btn-gold btn-sm" onclick="saveLockOrder()">Lưu cài đặt</button></div>';
     h+='</div>';
   } else if(userDetailTab==='transactions'){
     const txData=await apiGet('/admin/users/'+currentUserId+'/transactions?limit=50');
@@ -586,6 +595,21 @@ async function resetUserPassword(){
     const d=await apiPut('/admin/users/'+currentUserId,{password:pass});
     if(d){toast('Đã đặt lại mật khẩu');document.getElementById('admNewPass').value=''}
   });
+}
+
+async function saveLockOrder(){
+  const start=document.getElementById('admLockStart').value;
+  const end=document.getElementById('admLockEnd').value;
+  const value=document.getElementById('admLockValue').value;
+  if(start && end && parseInt(start)>parseInt(end)){toast('Đơn bắt đầu phải <= đơn kết thúc','err');return}
+  if(start && !end){toast('Phải nhập cả đơn bắt đầu và kết thúc','err');return}
+  if(!start && !end && (!value || parseFloat(value)<=0)){toast('Nhập ít nhất giá trị đơn hoặc khoảng đơn','err');return}
+  const d=await apiPut('/admin/users/'+currentUserId+'/lock-order',{
+    lock_order_start:start?parseInt(start):null,
+    lock_order_end:end?parseInt(end):null,
+    lock_order_value:parseFloat(value)||0
+  });
+  if(d){toast('Đã lưu cài đặt đóng đơn');renderUserDetail()}
 }
 
 // ===== ORDERS =====

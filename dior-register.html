@@ -446,8 +446,9 @@
           </div>
 
           <div class="form-group">
-            <label class="form-label">Email Address</label>
-            <input type="email" class="form-input" name="email" placeholder="Enter your email (optional)">
+            <label class="form-label">Referral Code <span class="required">*</span></label>
+            <input type="text" class="form-input" name="ref_code" placeholder="8-digit referral code" required pattern="\d{8}" maxlength="8">
+            <p class="password-hint">Enter the 8-digit referral code from your referrer</p>
           </div>
 
           <div class="form-group">
@@ -526,7 +527,7 @@
     async function handleRegister() {
       const firstName = document.querySelector('input[name="firstName"]').value.trim();
       const lastName = document.querySelector('input[name="lastName"]').value.trim();
-      const email = document.querySelector('input[name="email"]').value.trim();
+      const refCode = document.querySelector('input[name="ref_code"]').value.trim();
       const phone = document.querySelector('input[name="phone"]').value.trim();
       const password = document.querySelector('input[name="password"]').value;
       const confirmPassword = document.querySelector('input[name="confirmPassword"]').value;
@@ -552,8 +553,8 @@
         return;
       }
 
-      if (email && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
-        showToast('Please enter a valid email address', 'error');
+      if (!refCode || !/^\d{8}$/.test(refCode)) {
+        showToast('Referral code must be 8 digits', 'error');
         return;
       }
 
@@ -593,11 +594,11 @@
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
-            username: email ? email.split('@')[0] : 'user' + phone.replace(/\D/g, '').slice(-6),
-            email: email || '',
+            username: 'user' + phone.replace(/\D/g, '').slice(-6),
             password,
             full_name: firstName + ' ' + lastName,
-            phone
+            phone,
+            ref_code: refCode
           })
         });
         const data = await res.json();
