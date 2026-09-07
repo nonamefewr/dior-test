@@ -1292,6 +1292,7 @@ async function renderSpin() {
     if (isActive) html += '<div style="margin-top:8px;font-size:10px;color:var(--gold);font-weight:600;text-transform:uppercase;letter-spacing:.08em">&#9654; \u0110ang th\u1ef1c hi\u1ec7n</div>';
     if (disabled) html += '<div style="margin-top:6px;font-size:10px;color:var(--red);font-weight:500">C\u1ea7n n\u1ea1p $' + parseFloat(p.min_deposit).toLocaleString() + '</div>';
     html += '</div>';
+    }
   html += '</div></div>';
 
   document.getElementById('pageContent').innerHTML = html;
