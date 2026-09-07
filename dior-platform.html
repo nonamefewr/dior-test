@@ -236,7 +236,7 @@ tr:last-child td{border-bottom:none}
 .result-card .btn{width:100%;justify-content:center;padding:14px}
 
 /* PROFILE */
-.profile-header{position:relative;overflow:hidden;padding:24px 20px;color:#fff;min-height:120px;display:flex;align-items:flex-end}
+.profile-header{position:relative;overflow:hidden;padding:24px 20px;color:#fff;min-height:120px;display:flex;align-items:flex-end;justify-content:flex-start}
 .profile-header img{position:absolute;inset:0;width:100%;height:100%;object-fit:cover;z-index:0}
 .profile-header::after{content:'';position:absolute;inset:0;background:linear-gradient(to top,rgba(0,0,0,.85) 0%,rgba(0,0,0,.4) 50%,rgba(0,0,0,.2) 100%);z-index:1}
 .profile-header>*{position:relative;z-index:2}
@@ -848,10 +848,10 @@ async function renderHome() {
   /* --- ALL PACKAGES --- */
   const pkgImages = [
     '',
-    'https://media.christiandior.com/cdn-cgi/image/width=800,format=auto,quality=80/010124306429_E0968_Z.jpg',
-    'https://media.christiandior.com/cdn-cgi/image/width=800,format=auto,quality=80/010124306429_E1140_Z.jpg',
-    'https://media.christiandior.com/cdn-cgi/image/width=800,format=auto,quality=80/010124306429_E0969_Z.jpg',
-    'https://media.christiandior.com/cdn-cgi/image/width=800,format=auto,quality=80/010124306429_E0970_Z.jpg'
+    'https://images.unsplash.com/photo-1543163521-1bf539c55dd2?w=600&q=80',
+    'https://images.unsplash.com/photo-1584917865442-de89df76afd3?w=600&q=80',
+    'https://images.unsplash.com/photo-1560343090-f0409e92791a?w=600&q=80',
+    'https://images.unsplash.com/photo-1606107557195-0e29a4b5b4aa?w=600&q=80'
   ];
   if (pkgs.length > 0) {
     html += '<div class="section-title">Danh sách gian hàng</div><div class="pkg-grid">';
@@ -1194,7 +1194,25 @@ async function renderSpin() {
   spinState = 'idle';
   lastSpinResult = null;
 
+  /* Package images */
+  const spinPkgImages = [
+    '',
+    'https://images.unsplash.com/photo-1543163521-1bf539c55dd2?w=600&q=80',
+    'https://images.unsplash.com/photo-1584917865442-de89df76afd3?w=600&q=80',
+    'https://images.unsplash.com/photo-1560343090-f0409e92791a?w=600&q=80',
+    'https://images.unsplash.com/photo-1606107557195-0e29a4b5b4aa?w=600&q=80'
+  ];
+
   let html = '<div class="spin-section">';
+
+  /* Customer info */
+  html += '<div style="display:flex;align-items:center;gap:12px;margin-bottom:16px;padding:12px;background:var(--white);border:1px solid var(--light-gray)">';
+  html += '<div style="width:36px;height:36px;border-radius:50%;background:linear-gradient(135deg,var(--gold),var(--gld));display:flex;align-items:center;justify-content:center;font-family:var(--font-serif);font-size:14px;color:#fff;flex-shrink:0">' + (USER?.full_name || USER?.username || 'U').split(' ').map(w=>w[0]).join('').substring(0,2).toUpperCase() + '</div>';
+  html += '<div><div style="font-size:13px;font-weight:500">' + (USER?.full_name || USER?.username || '') + '</div>';
+  html += '<div style="font-size:11px;color:var(--gray)">ID: ' + (USER?.ref_code || '') + '</div></div>';
+  html += '<div style="margin-left:auto;text-align:right"><div style="font-size:11px;color:var(--gray)">Số dư</div><div style="font-size:14px;color:var(--gold);font-weight:600">$' + parseFloat(USER?.balance||0).toLocaleString() + '</div></div>';
+  html += '</div>';
+
   html += '<div style="font-family:var(--font-serif);font-size:22px;margin-bottom:2px;letter-spacing:.04em">Phân Phối Đơn Hàng</div>';
   html += '<div style="font-size:12px;color:var(--gray);margin-bottom:16px;letter-spacing:.02em">Vui lòng chọn gian hàng để bắt đầu</div>';
 
@@ -1258,24 +1276,22 @@ async function renderSpin() {
 
   html += '<div style="margin-top:16px"><button class="btn btn-s btn-sm" onclick="renderSpin()">&larr; Chọn gian hàng khác</button></div>';
 
-  /* Package selector */
+  /* Package selector \u2014 ALL packages */
   html += '<div class="spin-pkg-grid" style="margin-top:20px">';
-  if (unlockedPkgs.length > 0) {
-    for (const p of unlockedPkgs) {
-      const isActive = hasActive && USER.active_package_id === p.id;
-      html += '<div class="spin-pkg-card ' + (isActive?'active':'') + '" onclick="spinSelectPkg(' + p.id + ')">';
-      html += '<div style="display:flex;align-items:center;gap:10px;margin-bottom:8px">';
-      if (isActive) html += '<span style="display:inline-block;width:8px;height:8px;border-radius:50%;background:var(--gold);flex-shrink:0;box-shadow:0 0 6px var(--gold)"></span>';
-      html += '<div class="sp-name" style="margin:0">' + p.name + '</div></div>';
-      html += '<div class="sp-info">' + p.max_orders + ' \u0111\u01a1n \u00b7 ' + p.daily_order_limit + '/ng\u00e0y</div>';
-      html += '<div style="display:flex;justify-content:space-between;align-items:center;margin-top:8px"><div class="sp-commission" style="margin:0">' + p.commission_rate + '%</div>';
-      html += '<span style="font-size:10px;color:var(--gray)">$' + parseFloat(p.min_deposit).toLocaleString() + ' min</span></div>';
-      if (isActive) html += '<div style="margin-top:10px;font-size:10px;color:var(--gold);font-weight:600;text-transform:uppercase;letter-spacing:.08em">&#9654; \u0110ang th\u1ef1c hi\u1ec7n</div>';
-      html += '</div>';
-    }
-  } else {
-    html += '<div style="grid-column:1/-1;text-align:center;padding:40px 20px;background:var(--white);border:1px solid var(--light-gray)"><div style="font-size:40px;margin-bottom:10px">&#128274;</div><div style="font-family:var(--font-serif);font-size:15px;margin-bottom:6px">Ch\u01b0a m\u1edf kh\u00f3a gian h\u00e0ng</div><div style="font-size:12px;color:var(--gray);margin-bottom:16px">N\u1eadp ti\u1ec1n \u0111\u1ec3 m\u1edf kh\u00f3a gian h\u00e0ng cao hơn</div><button class="btn btn-gold btn-sm" onclick="openLiveChat()">N\u1eadp ti\u1ec1n ngay</button></div>';
-  }
+  for (const p of spinPkgs) {
+    const isActive = hasActive && USER.active_package_id === p.id;
+    const disabled = !p.is_unlocked;
+    const img = spinPkgImages[p.tier_level] || spinPkgImages[1];
+    html += '<div class="spin-pkg-card ' + (isActive?'active':'') + (disabled?' pkg-disabled':'') + '" style="' + (disabled?'opacity:.6;pointer-events:none':'cursor:pointer') + '" ' + (disabled?'':'onclick="spinSelectPkg(' + p.id + ')"') + '>';
+    html += '<div style="position:relative;height:100px;overflow:hidden;margin:-20px -20px 14px;border-radius:0"><img src="' + img + '" alt="' + p.name + '" style="width:100%;height:100%;object-fit:cover;' + (disabled?'filter:grayscale(40%) brightness(.85)':'') + '"><div style="position:absolute;inset:0;background:linear-gradient(to top,rgba(0,0,0,.7) 0%,rgba(0,0,0,.1) 100%)"></div>';
+    html += '<div style="position:absolute;bottom:8px;left:14px;color:#fff;z-index:1"><div class="sp-name" style="margin:0;font-size:15px">' + p.name + '</div>';
+    html += '<div style="font-size:10px;color:rgba(255,255,255,.7)">VIP ' + p.tier_level + '</div></div></div>';
+    html += '<div class="sp-info">' + p.max_orders + ' \u0111\u01a1n \u00b7 ' + p.daily_order_limit + '/ng\u00e0y</div>';
+    html += '<div style="display:flex;justify-content:space-between;align-items:center;margin-top:6px"><div class="sp-commission" style="margin:0">' + p.commission_rate + '%</div>';
+    html += '<span style="font-size:10px;color:var(--gray)">$' + parseFloat(p.min_deposit).toLocaleString() + ' min</span></div>';
+    if (isActive) html += '<div style="margin-top:8px;font-size:10px;color:var(--gold);font-weight:600;text-transform:uppercase;letter-spacing:.08em">&#9654; \u0110ang th\u1ef1c hi\u1ec7n</div>';
+    if (disabled) html += '<div style="margin-top:6px;font-size:10px;color:var(--red);font-weight:500">C\u1ea7n n\u1ea1p $' + parseFloat(p.min_deposit).toLocaleString() + '</div>';
+    html += '</div>';
   html += '</div></div>';
 
   document.getElementById('pageContent').innerHTML = html;
