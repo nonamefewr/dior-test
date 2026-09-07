@@ -215,6 +215,10 @@ tr:last-child td{border-bottom:none}
 .spin-result-inline .sri-price{color:var(--gold);font-size:14px;font-weight:600;margin-bottom:10px}
 .spin-result-inline .sri-info{font-size:11px;color:var(--gray);line-height:1.7;margin-bottom:16px}
 
+/* SPIN CUSTOMER INFO */
+.spin-customer-bar{display:flex;align-items:center;gap:12px;margin-bottom:16px;padding:12px;background:var(--white);border:1px solid var(--light-gray)}
+@media(min-width:769px){.spin-customer-bar{max-width:420px}}
+
 /* SPIN PKG SELECT */
 .spin-pkg-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(260px,1fr));gap:16px;padding:0 0 20px}
 .spin-pkg-card{background:var(--white);border:2px solid var(--light-gray);overflow:hidden;transition:all .3s;cursor:pointer;padding:20px;text-align:center}
@@ -223,7 +227,6 @@ tr:last-child td{border-bottom:none}
 .spin-pkg-card .sp-name{font-family:var(--font-serif);font-size:16px;font-weight:500;margin-bottom:8px}
 .spin-pkg-card .sp-info{font-size:12px;color:var(--gray);margin-bottom:6px;line-height:1.7}
 .spin-pkg-card .sp-commission{font-size:14px;color:var(--gold);font-weight:600;margin-bottom:12px}
-@media(min-width:769px){.spin-section{max-width:640px}}
 
 /* SPIN RESULT */
 .spin-result{position:fixed;inset:0;background:rgba(0,0,0,.7);z-index:300;display:none;align-items:center;justify-content:center;padding:20px}
@@ -1196,7 +1199,7 @@ async function renderSpin() {
   let html = '<div class="spin-section">';
 
   /* Customer info */
-  html += '<div style="display:flex;align-items:center;gap:12px;margin-bottom:16px;padding:12px;background:var(--white);border:1px solid var(--light-gray)">';
+  html += '<div class="spin-customer-bar">';
   html += '<div style="width:36px;height:36px;border-radius:50%;background:linear-gradient(135deg,var(--gold),var(--gld));display:flex;align-items:center;justify-content:center;font-family:var(--font-serif);font-size:14px;color:#fff;flex-shrink:0">' + (USER?.full_name || USER?.username || 'U').split(' ').map(w=>w[0]).join('').substring(0,2).toUpperCase() + '</div>';
   html += '<div><div style="font-size:13px;font-weight:500">' + (USER?.full_name || USER?.username || '') + '</div>';
   html += '<div style="font-size:11px;color:var(--gray)">ID: ' + (USER?.ref_code || '') + '</div></div>';
