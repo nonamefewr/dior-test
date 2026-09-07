@@ -133,7 +133,7 @@ app.post('/api/auth/register', authLimiter, async (req, res) => {
     // Referral bonus
     if (referredBy) {
       await pool.query('INSERT INTO transactions (user_id,type,amount,balance_before,balance_after,description,reference_id,reference_type) VALUES (?,\'referral_bonus\',0,0,0,?,?,?)',
-        [referredBy, 'Mã邀请 ' + finalRef + ' được đăng ký', result.insertId, 'user']);
+        [referredBy, 'Mã mời ' + finalRef + ' được đăng ký', result.insertId, 'user']);
     }
     // Mark pre-generated referral code as used
     if (preGenRefId) {
@@ -1222,7 +1222,7 @@ app.post('/api/admin/refcodes', authMiddleware, adminMiddleware, async (req, res
     const [exists] = await pool.query('SELECT id FROM referral_codes WHERE code=?', [code]);
     if (exists.length) return res.status(400).json(fail('Mã mời đã tồn tại'));
     await pool.query('INSERT INTO referral_codes (code, created_by_admin) VALUES (?, ?)', [code, req.user.id]);
-    res.json(success({ code }, 'Đã tạo mã邀请'));
+    res.json(success({ code }, 'Đã tạo mã mời'));
   } catch(e) { res.status(500).json(fail('Lỗi server')); }
 });
 

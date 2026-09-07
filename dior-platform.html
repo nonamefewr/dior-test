@@ -305,6 +305,8 @@ tr:last-child td{border-bottom:none}
 .notif-item{padding:12px 16px;border-bottom:1px solid var(--light-gray);font-size:12px;line-height:1.6;transition:background .15s}
 .notif-item:last-child{border-bottom:none}
 .notif-item:hover{background:var(--off-white)}
+.notif-item.unread{background:rgba(201,169,110,.06)}
+.notif-item.unread::before{content:'';display:inline-block;width:6px;height:6px;border-radius:50%;background:var(--gold);margin-right:6px;vertical-align:middle}
 .notif-item .notif-time{font-size:10px;color:var(--gray);margin-top:4px}
 .notif-empty{padding:40px 16px;text-align:center;color:var(--gray);font-size:13px}
 /* TOAST */
@@ -668,14 +670,20 @@ async function doLogin() {
 }
 // ===== NOTIFICATIONS =====
 let notifications = [];
-function addNotif(msg) {
-  notifications.unshift({ msg: msg, time: new Date() });
+let notifUnreadCount = 0;
+function addNotif(msg, silent) {
+  notifications.unshift({ msg: msg, time: new Date(), read: false });
   if (notifications.length > 50) notifications.pop();
-  renderNotifBadge();
+  if (!silent) { notifUnreadCount++; renderNotifBadge(); }
 }
 function renderNotifBadge() {
   const badge = document.getElementById('notifBadge');
-  if (badge) { badge.style.display = notifications.length > 0 ? 'block' : 'none'; badge.textContent = notifications.length; }
+  if (badge) { badge.style.display = notifUnreadCount > 0 ? 'block' : 'none'; badge.textContent = notifUnreadCount; }
+}
+function markAllNotifRead() {
+  notifUnreadCount = 0;
+  notifications.forEach(n => n.read = true);
+  renderNotifBadge();
 }
 function toggleNotifications() {
   const popup = document.getElementById('notifPopup');
@@ -687,9 +695,14 @@ function toggleNotifications() {
       list.innerHTML = '<div class="notif-empty">Chưa có thông báo</div>';
     } else {
       list.innerHTML = notifications.map(n =>
-        '<div class="notif-item">' + n.msg + '<div class="notif-time">' + n.time.toLocaleString('vi') + '</div></div>'
-      ).join('');
+        '<div class="notif-item' + (n.read ? '' : ' unread') + '">' + n.msg + '<div class="notif-time">' + n.time.toLocaleString('vi') + '</div></div>'
+      ).join('') +
+      '<div style="padding:8px 16px;text-align:center;border-top:1px solid var(--light-gray)"><button class="btn btn-s" onclick="markAllNotifRead();toggleNotifications()" style="font-size:11px">Đánh dấu đã đọc</button></div>';
     }
+    /* Mark all as read when opening */
+    notifUnreadCount = 0;
+    notifications.forEach(n => n.read = true);
+    renderNotifBadge();
   } else {
     popup.style.display = 'none';
   }
