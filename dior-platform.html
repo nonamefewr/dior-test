@@ -1442,12 +1442,19 @@ async function doSpin() {
         /* Check lock order notification */
         checkLockOrderNotif(r);
         updateSpinSteps(1);
+        /* Calculate estimated commission */
+        const activePkg = spinPkgs.find(p => p.id === USER.active_package_id);
+        const estRate = activePkg ? parseFloat(activePkg.commission_rate || 0) : 0;
+        const estProfit = prodPrice * estRate / 100;
+        const estTotal = prodPrice + estProfit;
         showResult(
           '<div style="font-size:10px;letter-spacing:.15em;text-transform:uppercase;color:var(--gold);margin-bottom:10px;font-weight:600">Chúc mừng! Bạn đã nhận được</div>' +
           (prodImg ? '<img class="result-prod-img" src="' + prodImg + '" alt="' + prodName + '" onerror="this.src=\'' + (matchProd ? matchProd.img : '') + '\';this.onerror=null">' : '') +
           '<div class="result-name">' + prodName + '</div>' +
           '<div class="result-price">' + fmtMoney(prodPrice) + '</div>' +
-          '<div class="result-info">Mã đơn: <b>' + r.order_code + '</b><br>Tiến trình: ' + r.progress.completed + '/' + r.progress.total + ' (' + r.progress.percent + '%)</div>' +
+          '<div class="result-info">Mã đơn: <b>' + r.order_code + '</b><br>Tiến trình: ' + r.progress.completed + '/' + r.progress.total + ' (' + r.progress.percent + '%)' +
+          (estProfit > 0 ? '<br><span style="margin-top:6px;display:inline-block">Số tiền lãi đơn đó: <b style="color:var(--grn)">' + fmtMoney(estProfit) + '</b></span><br>Tổng số tiền nhận lại: <b style="color:var(--gold);font-size:14px">' + fmtMoney(estTotal) + '</b>' : '') +
+          '</div>' +
           '<div class="result-btns">' +
           '<button class="btn btn-gold" onclick="doDistribute()">Phân phối ngay</button>' +
           '<button class="btn btn-s btn-sm" onclick="hideResult();renderSpin()">Đóng</button>' +
@@ -1559,20 +1566,16 @@ async function doDistribute() {
   const r = lastSpinResult;
   const mp = lastSpinResult._prod;
   const distComm = parseFloat(r.commission_added || r.commission_amount || 0);
-  const orderPrice = parseFloat(mp.price || 0);
-  const totalReceived = orderPrice + distComm;
 
   updateSpinSteps(2);
   document.getElementById('resultCard').innerHTML =
     '<div style="font-size:42px;margin-bottom:8px">&#127881;</div>' +
     '<div class="result-name">Phân phối thành công!</div>' +
     (mp.img ? '<img class="result-prod-img" src="' + mp.img + '" alt="' + mp.name + '" style="width:120px;height:120px;margin-top:10px" onerror="this.style.display=\'none\'">' : '') +
-    '<div class="result-price">' + fmtMoney(orderPrice) + '</div>' +
+    '<div class="result-price">' + fmtMoney(mp.price) + '</div>' +
     '<div class="result-info">Mã đơn: <b>' + r.order_code + '</b>' +
     (distComm > 0 ? '<br>Hoa hồng nhận: <b style="color:var(--grn)">' + fmtMoney(distComm) + '</b>' : '') +
-    '<br>Tiến trình: ' + r.progress.completed + '/' + r.progress.total + ' (' + r.progress.percent + '%)' +
-    '<br><span style="margin-top:6px;display:inline-block">Số tiền lãi đơn đó: <b style="color:var(--grn)">' + fmtMoney(distComm) + '</b></span>' +
-    '<br>Tổng số tiền nhận lại: <b style="color:var(--gold);font-size:14px">' + fmtMoney(totalReceived) + '</b></div>' +
+    '<br>Tiến trình: ' + r.progress.completed + '/' + r.progress.total + ' (' + r.progress.percent + '%)</div>' +
     '<button class="btn btn-p" style="width:100%;justify-content:center;padding:14px" onclick="hideResult();renderSpin()">Tiếp tục kinh doanh</button>';
 
   isSpinning = false;
@@ -1585,6 +1588,8 @@ async function doDistribute() {
         const w = document.getElementById('homeStatsWrap');
         if (w) w.innerHTML = renderHomeStats(s);
       }
+      /* Add distribute notification */
+      if (distComm > 0) addNotif('Phân phối thành công: +' + fmtMoney(distComm) + ' hoa hồng từ đơn ' + r.order_code);
       if (currentPage === 'spin') {
         const w = document.getElementById('spinStatsWrap');
         if (w) renderSpinStats(w);

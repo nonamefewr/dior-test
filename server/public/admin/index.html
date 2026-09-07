@@ -126,6 +126,7 @@ tr:hover{background:#fafafa}
     <div class="nav-item" onclick="showSection('products')">Sản phẩm</div>
     <div class="nav-item" onclick="showSection('packages')">Gian hàng</div>
     <div class="nav-item" onclick="showSection('users')">Người dùng</div>
+    <div class="nav-item" onclick="showSection('refcodes')">Mã mời</div>
     <div class="nav-item" onclick="showSection('withdrawals')">Rút tiền</div>
     <div class="nav-item" onclick="showSection('orders')">Đơn hàng</div>
     <div class="nav-item" onclick="showSection('chat')">Chat</div>
@@ -202,6 +203,7 @@ function showSection(s){
   else if(s==='products')loadProducts();
   else if(s==='packages')loadPackages();
   else if(s==='users')loadUsers();
+  else if(s==='refcodes')loadRefCodes();
   else if(s==='withdrawals')loadWithdrawals();
   else if(s==='orders')loadOrders();
   else if(s==='chat')loadChat();
@@ -271,6 +273,31 @@ function openEditPackage(id){apiGet('/admin/packages').then(d=>{const p=(d?.data
 async function savePackage(id){const b={name:document.getElementById('kName').value,slug:document.getElementById('kSlug').value,image:document.getElementById('kImage').value,min_deposit:parseFloat(document.getElementById('kMin').value)||0,max_orders:parseInt(document.getElementById('kMax').value)||0,daily_order_limit:parseInt(document.getElementById('kDaily').value)||0,commission_rate:parseFloat(document.getElementById('kRate').value)||0,tier_level:parseInt(document.getElementById('kTier').value)||1,sort_order:parseInt(document.getElementById('kSort').value)||0,description:document.getElementById('kDesc').value};const d=id?await apiPut('/admin/packages/'+id,b):await apiPost('/admin/packages',b);if(d){closeModal();loadPackages()}}
 async function deletePackage(id){showConfirmPopup('Ẩn gian hàng này?',async()=>{const d=await apiDel('/admin/packages/'+id);if(d)loadPackages()})}
 
+// ===== REFERRAL CODES =====
+async function loadRefCodes(){
+  const d=await apiGet('/admin/refcodes');
+  if(!d)return;
+  const codes=d.data||[];
+  let h='<div class="page-title">Quản lý mã mời</div>';
+  h+='<div style="display:flex;gap:10px;margin-bottom:16px;align-items:center"><button class="btn btn-gold" onclick="openCreateRefCode()">+ Tạo mã mời mới</button></div>';
+  h+='<div class="tbl-wrap"><table><thead><tr><th>Mã mời</th><th>Tạo cho user</th><th>Trạng thái</th><th>Sử dụng</th><th>Ngày tạo</th><th>Thao tác</th></tr></thead><tbody>';
+  if(codes.length===0) h+='<tr><td colspan="6" style="text-align:center;color:var(--gray);padding:32px">Chưa có mã mời nào</td></tr>';
+  for(const c of codes){
+    const st=c.is_used?'<span class="badge badge-green">Đã dùng</span>':'<span class="badge badge-gold">Chưa dùng</span>';
+    h+='<tr><td><b style="letter-spacing:2px;font-size:14px">'+c.code+'</b></td><td>'+(c.username||'-')+'</td><td>'+st+'</td><td>'+(c.used_by_user||'-')+'</td><td>'+new Date(c.created_at).toLocaleDateString('vi')+'</td><td><button class="btn btn-s btn-sm" onclick="copyRefLink(\''+c.code+'\')">Copy link</button></td></tr>';
+  }
+  h+='</tbody></table></div>';
+  document.getElementById('mainContent').innerHTML=h;
+}
+function openCreateRefCode(){
+  openModal('<h3>Tạo mã mời mới</h3><div class="fg"><label>Mã mời (8 chữ số)</label><input id="refCodeInput" maxlength="8" pattern="\\d{8}" placeholder="VD: 12345678"></div><div style="font-size:11px;color:var(--gray);margin-bottom:16px">Mã mời phải là 8 chữ số. Để trống sẽ tự动生成.</div><div class="btn-row"><button class="btn btn-s" onclick="closeModal()">Hủy</button><button class="btn btn-gold" onclick="saveRefCode()">Tạo mã</button></div>');
+}
+async function saveRefCode(){
+  const code=document.getElementById('refCodeInput').value.trim();
+  if(code && !/^\d{8}$/.test(code)){toast('Mã mời phải là 8 chữ số','err');return}
+  const d=await apiPost('/admin/refcodes',{code:code||undefined});
+  if(d){toast('Đã tạo mã邀请: '+(d.data?.code||''));closeModal();loadRefCodes()}
+}
 
 // ===== USERS =====
 async function loadUsers(search){

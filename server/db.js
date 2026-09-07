@@ -249,6 +249,19 @@ async function initDB() {
       FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
     ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4`);
 
+    // ===== REFERRAL CODES (admin-created, reusable) =====
+    await conn.query(`CREATE TABLE IF NOT EXISTS referral_codes (
+      id INT AUTO_INCREMENT PRIMARY KEY,
+      code VARCHAR(20) UNIQUE NOT NULL,
+      created_by_admin INT DEFAULT NULL,
+      used_by_user_id INT DEFAULT NULL,
+      username VARCHAR(50) DEFAULT '',
+      is_used TINYINT(1) DEFAULT 0,
+      created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+      FOREIGN KEY (created_by_admin) REFERENCES users(id) ON DELETE SET NULL,
+      FOREIGN KEY (used_by_user_id) REFERENCES users(id) ON DELETE SET NULL
+    ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4`);
+
     // ===== INDEXES for performance =====
     const indexes = [
       'CREATE INDEX IF NOT EXISTS idx_orders_user_status ON orders(user_id, status)',

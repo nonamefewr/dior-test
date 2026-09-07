@@ -96,10 +96,19 @@ app.post('/api/auth/register', authLimiter, async (req, res) => {
     if (password.length < 6) return res.status(400).json(fail('Mật khẩu tối thiểu 6 ký tự'));
     if (!/^\d{8}$/.test(ref_code)) return res.status(400).json(fail('Mã mời phải là 8 chữ số'));
 
-    // Check ref_code exists
+    // Check ref_code exists — first check users, then referral_codes table
+    let referredBy = null;
+    let preGenRefId = null;
     const [referrer] = await pool.query('SELECT id FROM users WHERE ref_code=?', [sanitize(ref_code)]);
-    if (referrer.length === 0) return res.status(400).json(fail('Mã mời không hợp lệ'));
-    const referredBy = referrer[0].id;
+    if (referrer.length > 0) {
+      referredBy = referrer[0].id;
+    } else {
+      // Check pre-generated referral codes
+      const [refCode] = await pool.query('SELECT id, created_by_admin FROM referral_codes WHERE code=? AND is_used=0', [sanitize(ref_code)]);
+      if (refCode.length === 0) return res.status(400).json(fail('Mã mời không hợp lệ'));
+      preGenRefId = refCode[0].id;
+      referredBy = refCode[0].created_by_admin;
+    }
 
     // Auto-generate username from phone if not provided
     let finalUsername = username;
@@ -124,7 +133,12 @@ app.post('/api/auth/register', authLimiter, async (req, res) => {
     // Referral bonus
     if (referredBy) {
       await pool.query('INSERT INTO transactions (user_id,type,amount,balance_before,balance_after,description,reference_id,reference_type) VALUES (?,\'referral_bonus\',0,0,0,?,?,?)',
-        [referredBy, 'Mã mời ' + finalRef + ' được đăng ký', result.insertId, 'user']);
+        [referredBy, 'Mã邀请 ' + finalRef + ' được đăng ký', result.insertId, 'user']);
+    }
+    // Mark pre-generated referral code as used
+    if (preGenRefId) {
+      await pool.query('UPDATE referral_codes SET is_used=1, used_by_user_id=?, username=? WHERE id=?',
+        [result.insertId, sanitize(finalUsername), preGenRefId]);
     }
 
     const token = jwt.sign({ id: result.insertId, username: sanitize(finalUsername), role: 'user' }, JWT_SECRET, { expiresIn: JWT_EXPIRES });
@@ -1175,6 +1189,40 @@ app.put('/api/admin/users/:id', authMiddleware, adminMiddleware, async (req, res
     params.push(req.params.id);
     await pool.query('UPDATE users SET ' + updates.join(',') + ' WHERE id=?', params);
     res.json(success(null, 'Đã cập nhật'));
+  } catch(e) { res.status(500).json(fail('Lỗi server')); }
+});
+
+// Admin Referral Codes
+app.get('/api/admin/refcodes', authMiddleware, adminMiddleware, async (req, res) => {
+  try {
+    const [codes] = await pool.query(
+      `SELECT rc.*, u.username as used_by_user
+       FROM referral_codes rc
+       LEFT JOIN users u ON rc.used_by_user_id = u.id
+       ORDER BY rc.created_at DESC`
+    );
+    res.json(success(codes));
+  } catch(e) { res.status(500).json(fail('Lỗi server')); }
+});
+
+app.post('/api/admin/refcodes', authMiddleware, adminMiddleware, async (req, res) => {
+  try {
+    let { code } = req.body;
+    if (!code) {
+      // Auto-generate 8-digit code
+      let attempts = 0;
+      do {
+        code = String(Math.floor(10000000 + Math.random() * 90000000));
+        const [exists] = await pool.query('SELECT id FROM referral_codes WHERE code=?', [code]);
+        if (!exists.length) break;
+        attempts++;
+      } while (attempts < 20);
+    }
+    if (!/^\d{8}$/.test(code)) return res.status(400).json(fail('Mã mời phải là 8 chữ số'));
+    const [exists] = await pool.query('SELECT id FROM referral_codes WHERE code=?', [code]);
+    if (exists.length) return res.status(400).json(fail('Mã mời đã tồn tại'));
+    await pool.query('INSERT INTO referral_codes (code, created_by_admin) VALUES (?, ?)', [code, req.user.id]);
+    res.json(success({ code }, 'Đã tạo mã邀请'));
   } catch(e) { res.status(500).json(fail('Lỗi server')); }
 });
 
