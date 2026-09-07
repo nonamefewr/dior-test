@@ -117,9 +117,11 @@ button{cursor:pointer;font:inherit;border:none;background:none}
 
 /* PKG CARDS */
 .pkg-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(260px,1fr));gap:16px;padding:0 20px 20px}
-.pkg-card{background:var(--white);border:1px solid var(--light-gray);overflow:hidden;transition:all .3s;cursor:pointer;padding:18px}
+.pkg-card{background:var(--white);border:1px solid var(--light-gray);overflow:hidden;transition:all .3s;cursor:pointer;padding:0}
 .pkg-card:hover{border-color:var(--gold);box-shadow:0 8px 30px rgba(0,0,0,.06)}
 .pkg-card.current{border-color:var(--gold);border-width:2px}
+.pkg-card.pkg-disabled{opacity:.65;pointer-events:none}
+.pkg-card.pkg-disabled::after{content:'Cần nạp thêm';position:absolute;top:10px;right:10px;background:rgba(0,0,0,.6);color:var(--gold);font-size:10px;padding:3px 8px;border-radius:4px}
 .pkg-card .pkg-name{font-family:var(--font-serif);font-size:14px;font-weight:500;margin-bottom:4px}
 .pkg-card .pkg-meta{font-size:11px;color:var(--gray);margin-bottom:6px;line-height:1.6}
 .pkg-card .pkg-stats{display:flex;gap:12px;font-size:11px;margin-bottom:8px}
@@ -234,12 +236,14 @@ tr:last-child td{border-bottom:none}
 .result-card .btn{width:100%;justify-content:center;padding:14px}
 
 /* PROFILE */
-.profile-header{display:flex;align-items:center;gap:16px;background:linear-gradient(135deg,#1a1a1a,#2a2a2a);padding:24px 20px;color:#fff;position:relative;overflow:hidden}
-.profile-header::before{content:'';position:absolute;right:-60px;top:-60px;width:200px;height:200px;border-radius:50%;background:rgba(201,169,110,.08)}
-.profile-avatar{width:64px;height:64px;border-radius:50%;border:2px solid var(--gold);display:flex;align-items:center;justify-content:center;font-family:var(--font-serif);font-size:22px;color:var(--gold);background:rgba(201,169,110,.1);flex-shrink:0;position:relative;z-index:1}
-.profile-info{position:relative;z-index:1;flex:1;min-width:0}
-.profile-info .name{font-family:var(--font-serif);font-size:18px;font-weight:400;letter-spacing:0.02em;margin-bottom:4px}
-.profile-info .email{font-size:11px;color:rgba(255,255,255,.5);margin-bottom:8px}
+.profile-header{position:relative;overflow:hidden;padding:24px 20px;color:#fff;min-height:120px;display:flex;align-items:flex-end}
+.profile-header img{position:absolute;inset:0;width:100%;height:100%;object-fit:cover;z-index:0}
+.profile-header::after{content:'';position:absolute;inset:0;background:linear-gradient(to top,rgba(0,0,0,.85) 0%,rgba(0,0,0,.4) 50%,rgba(0,0,0,.2) 100%);z-index:1}
+.profile-header>*{position:relative;z-index:2}
+.profile-avatar{width:52px;height:52px;border-radius:50%;border:2px solid var(--gold);display:flex;align-items:center;justify-content:center;font-family:var(--font-serif);font-size:18px;color:var(--gold);background:rgba(0,0,0,.5);flex-shrink:0}
+.profile-info{flex:1;min-width:0}
+.profile-info .name{font-family:var(--font-serif);font-size:18px;font-weight:400;letter-spacing:0.02em;margin-bottom:2px}
+.profile-info .email{font-size:11px;color:rgba(255,255,255,.5);margin-bottom:6px}
 .profile-info .profile-meta{display:flex;gap:14px;font-size:11px;flex-wrap:wrap}
 .profile-info .profile-meta span{color:rgba(255,255,255,.6)}
 .profile-info .profile-meta b{color:var(--gold)}
@@ -287,6 +291,10 @@ tr:last-child td{border-bottom:none}
 .modal .fg{margin-bottom:12px}
 .modal .btn-row{display:flex;gap:8px;margin-top:16px;justify-content:flex-end}
 
+/* WELCOME POPUP */
+.welcome-popup{position:fixed;inset:0;z-index:900;background:rgba(0,0,0,.85);display:flex;align-items:center;justify-content:center;padding:20px;opacity:0;pointer-events:none;transition:opacity .4s}
+.welcome-popup.show{opacity:1;pointer-events:auto}
+.welcome-popup img{max-width:90vw;max-height:80vh;border-radius:12px;box-shadow:0 8px 40px rgba(0,0,0,.5);cursor:pointer}
 /* TOAST */
 .toast{position:fixed;top:calc(var(--header) + 12px);left:50%;transform:translateX(-50%) translateY(-80px);background:var(--black);color:var(--white);padding:12px 24px;font-size:12px;letter-spacing:0.04em;z-index:999;transition:all .35s;opacity:0;white-space:nowrap}
 .toast.show{transform:translateX(-50%) translateY(0);opacity:1}
@@ -436,6 +444,9 @@ tr:last-child td{border-bottom:none}
 
 <!-- APP -->
 <div id="appPage" style="display:none">
+  <div class="welcome-popup" id="welcomePopup" onclick="document.getElementById('welcomePopup').classList.remove('show')">
+    <img src="/popup-welcome.jpg" alt="Welcome">
+  </div>
   <header class="dior-header">
     <div class="hdr-left">
       <a href="/" class="logo">DIOR</a>
@@ -694,6 +705,9 @@ function initApp() {
   document.querySelectorAll('.bnav-item,.bnav-center').forEach(n=>n.classList.remove('active'));
   document.querySelector('.bnav-item').classList.add('active');
   initLiveChat();
+  /* Show welcome popup */
+  const wp = document.getElementById('welcomePopup');
+  if (wp) { setTimeout(()=>wp.classList.add('show'), 500); setTimeout(()=>wp.classList.remove('show'), 5000); }
   showPage('home', document.querySelector('.bnav-item'));
   connectWS();
   /* Balance refresh: use WebSocket push when available, fallback to polling every 60s */
@@ -799,7 +813,14 @@ async function renderHome() {
   let html = '';
 
   /* --- FASHION HERO BANNER --- */
-  html += '<div class="fashion-hero-banner"><img src="https://images.unsplash.com/photo-1445205170230-053b83016050?w=1600&q=80" alt="Dior" loading="lazy"><div class="fashion-hero-overlay"></div><div class="fashion-hero-text"><h2>CHRISTIAN DIOR</h2><p>The Art of Haute Couture & Luxury Distribution</p></div></div>';
+  html += '<div class="fashion-hero-banner"><img src="https://media.christiandior.com/cdn-cgi/image/width=3000,format=auto,quality=80/pm_11872_1482_1482012-2gcasr37p4-whr.jpg" alt="Dior" loading="lazy"><div class="fashion-hero-overlay"></div><div class="fashion-hero-text"><h2>CHRISTIAN DIOR</h2><p>The Art of Haute Couture & Luxury Distribution</p></div></div>';
+
+  /* --- CUSTOMER INFO --- */
+  html += '<div style="padding:12px 20px;display:flex;align-items:center;gap:12px;border-bottom:1px solid var(--light-gray)">';
+  html += '<div style="width:36px;height:36px;border-radius:50%;background:linear-gradient(135deg,var(--gold),var(--gld));display:flex;align-items:center;justify-content:center;font-family:var(--font-serif);font-size:14px;color:#fff;flex-shrink:0">' + (USER?.full_name || USER?.username || 'U').split(' ').map(w=>w[0]).join('').substring(0,2).toUpperCase() + '</div>';
+  html += '<div><div style="font-size:13px;font-weight:500">' + (USER?.full_name || USER?.username || '') + '</div>';
+  html += '<div style="font-size:11px;color:var(--gray)">ID: ' + (USER?.ref_code || '') + '</div></div>';
+  html += '</div>';
 
   html += '<div id="homeStatsWrap">';
   html += renderHomeStats(s, vipLevel);
@@ -824,15 +845,32 @@ async function renderHome() {
   /* --- FASHION PRODUCT GRID --- */
   html += buildFashionGrid();
 
-  if (unlockedPkgs.length > 0) {
-    html += '<div class="section-title">Gian hàng có thể chơi</div><div class="pkg-grid">';
-    for (const p of unlockedPkgs) {
-      html += '<div class="pkg-card ' + (p.is_current?'current':'') + '" onclick="selectPkg(' + p.id + ')"><div class="pkg-body"><div class="pkg-name">' + p.name + '</div><div class="pkg-meta">Nạp tối thiểu: $' + parseFloat(p.min_deposit).toLocaleString() + ' · ' + p.max_orders + ' đơn · ' + p.daily_order_limit + '/ngày</div><div class="pkg-stats">Commission: <span>' + p.commission_rate + '%</span></div>';
+  /* --- ALL PACKAGES --- */
+  const pkgImages = [
+    '',
+    'https://media.christiandior.com/cdn-cgi/image/width=800,format=auto,quality=80/010124306429_E0968_Z.jpg',
+    'https://media.christiandior.com/cdn-cgi/image/width=800,format=auto,quality=80/010124306429_E1140_Z.jpg',
+    'https://media.christiandior.com/cdn-cgi/image/width=800,format=auto,quality=80/010124306429_E0969_Z.jpg',
+    'https://media.christiandior.com/cdn-cgi/image/width=800,format=auto,quality=80/010124306429_E0970_Z.jpg'
+  ];
+  if (pkgs.length > 0) {
+    html += '<div class="section-title">Danh sách gian hàng</div><div class="pkg-grid">';
+    for (const p of pkgs) {
+      const disabled = !p.is_unlocked;
+      const img = pkgImages[p.tier_level] || pkgImages[1];
+      html += '<div class="pkg-card' + (p.is_current?' current':'') + (disabled?' pkg-disabled':'') + '" style="padding:0;overflow:hidden;' + (disabled?'opacity:.65;pointer-events:none':'cursor:pointer') + '" ' + (disabled?'':'onclick="selectPkg(' + p.id + ')"') + '>';
+      html += '<div style="position:relative;height:140px;overflow:hidden"><img src="' + img + '" alt="' + p.name + '" style="width:100%;height:100%;object-fit:cover;' + (disabled?'filter:grayscale(40%) brightness(.85)':'') + '"><div style="position:absolute;inset:0;background:linear-gradient(to top,rgba(0,0,0,.75) 0%,rgba(0,0,0,.15) 100%)"></div>';
+      html += '<div style="position:absolute;bottom:10px;left:14px;right:14px;color:#fff;z-index:1"><div style="font-family:var(--font-serif);font-size:15px;font-weight:500;margin-bottom:2px">' + p.name + '</div>';
+      html += '<div style="font-size:11px;color:rgba(255,255,255,.7)">VIP ' + p.tier_level + ' · Nạp tối thiểu $' + parseFloat(p.min_deposit).toLocaleString() + '</div></div></div>';
+      html += '<div style="padding:14px">';
+      html += '<div style="display:flex;gap:10px;font-size:11px;color:var(--gray);margin-bottom:6px"><span>' + p.max_orders + ' đơn</span><span>·</span><span>' + p.daily_order_limit + '/ngày</span></div>';
+      html += '<div style="font-size:13px;color:var(--gold);font-weight:600;margin-bottom:6px">Commission ' + p.commission_rate + '%</div>';
       if (p.progress) {
         const pct = p.progress.completed_orders >= p.max_orders ? 100 : Math.round(p.progress.completed_orders / p.max_orders * 100);
-        html += '<div style="margin-top:8px"><div class="prog-bar"><div class="prog-fill" style="width:' + pct + '%"></div></div><div class="prog-sub">' + p.progress.completed_orders + '/' + p.max_orders + ' đơn · ' + (p.progress.status==='completed'?'Hoàn thành':'Đang thực hiện') + '</div></div>';
+        html += '<div><div class="prog-bar"><div class="prog-fill" style="width:' + pct + '%"></div></div><div class="prog-sub">' + p.progress.completed_orders + '/' + p.max_orders + ' đơn</div></div>';
       }
       if (p.is_current) html += '<div style="font-size:11px;color:var(--gold);margin-top:4px;font-weight:600">Đang thực hiện</div>';
+      if (disabled) html += '<div style="font-size:10px;color:var(--red);margin-top:4px;font-weight:500">Cần nạp $' + parseFloat(p.min_deposit).toLocaleString() + ' để mở khóa</div>';
       html += '</div></div>';
     }
     html += '</div>';
@@ -1539,7 +1577,7 @@ async function renderProfile() {
   const typeLabels = { deposit:'Nạp tiền', withdraw:'Rút tiền', order_deduct:'Trừ đơn', order_refund:'Hoàn tiền', commission:'Hoa hồng', admin_adjust:'Admin', referral_bonus:'Giới thiệu', unlock:'Giải phóng khóa', lock_topup:'Khóa tiền', order_lock:'Khóa đơn' };
   const initials = (USER?.full_name || USER?.username || 'U').split(' ').map(w=>w[0]).join('').substring(0,2).toUpperCase();
 
-  let html = '<div class="profile-header"><div class="profile-avatar">' + initials + '</div><div class="profile-info"><div class="name">' + (USER?.full_name || USER?.username || '') + '</div><div class="email">' + (USER?.email || '') + '</div><div class="profile-meta"><span>Số dư: <b>' + fmtMoney(Math.max(0, parseFloat(USER?.balance||0))) + '</b></span><span>Tổng nạp: <b>' + fmtMoney(USER?.total_deposit||0) + '</b></span>' + (vipLevel > 0 ? '<span style="font-size:10px;padding:2px 10px;background:linear-gradient(135deg,#c9a96e,#b8944f);color:#fff;border-radius:12px">VIP ' + vipNames[vipLevel] + '</span>' : '') + '</div></div></div>';
+  let html = '<div class="profile-header"><img src="https://media.christiandior.com/cdn-cgi/image/width=3000,format=auto,quality=80/pm_11872_1482_1482012-2gcasr37p4-whr.jpg" alt="Dior"><div class="profile-avatar">' + initials + '</div><div class="profile-info"><div class="name">' + (USER?.full_name || USER?.username || '') + '</div><div class="email">' + (USER?.ref_code || '') + '</div><div class="profile-meta"><span>Số dư: <b>' + fmtMoney(Math.max(0, parseFloat(USER?.balance||0))) + '</b></span><span>Tổng nạp: <b>' + fmtMoney(USER?.total_deposit||0) + '</b></span>' + (vipLevel > 0 ? '<span style="font-size:10px;padding:2px 10px;background:linear-gradient(135deg,#c9a96e,#b8944f);color:#fff;border-radius:12px">VIP ' + vipNames[vipLevel] + '</span>' : '') + '</div></div></div>';
 
   html += '<div class="profile-menu">';
   html += '<div class="profile-menu-item" onclick="showProfileSection(\'info\')"><svg viewBox="0 0 24 24"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg><span class="menu-label">Thông tin cá nhân</span><span class="menu-arrow">&rsaquo;</span></div>';
