@@ -116,7 +116,7 @@ button{cursor:pointer;font:inherit;border:none;background:none}
 .vip-tier-card.reached::after{content:'\2713';position:absolute;top:8px;right:10px;font-size:12px;color:var(--gold);font-weight:700}
 
 /* PKG CARDS */
-.pkg-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(260px,1fr));gap:16px;padding:0 20px 20px}
+.pkg-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(260px,1fr));gap:16px;padding:0 0 20px}
 .pkg-card{background:var(--white);border:1px solid var(--light-gray);overflow:hidden;transition:all .3s;cursor:pointer;padding:0}
 .pkg-card:hover{border-color:var(--gold);box-shadow:0 8px 30px rgba(0,0,0,.06)}
 .pkg-card.current{border-color:var(--gold);border-width:2px}
@@ -126,6 +126,7 @@ button{cursor:pointer;font:inherit;border:none;background:none}
 .pkg-card .pkg-meta{font-size:11px;color:var(--gray);margin-bottom:6px;line-height:1.6}
 .pkg-card .pkg-stats{display:flex;gap:12px;font-size:11px;margin-bottom:8px}
 .pkg-card .pkg-stats span{color:var(--gold);font-weight:600}
+@media(min-width:769px){.section-title,.pkg-grid{padding-left:20px}}
 
 /* HOME PROMO */
 .home-promo{display:flex;align-items:center;gap:14px;margin:0 20px 20px;padding:16px 20px;background:linear-gradient(135deg,var(--gold),var(--gld));color:#fff;cursor:pointer;transition:all .3s}
@@ -215,13 +216,14 @@ tr:last-child td{border-bottom:none}
 .spin-result-inline .sri-info{font-size:11px;color:var(--gray);line-height:1.7;margin-bottom:16px}
 
 /* SPIN PKG SELECT */
-.spin-pkg-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(260px,1fr));gap:16px;padding:0 20px 20px}
+.spin-pkg-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(260px,1fr));gap:16px;padding:0 0 20px}
 .spin-pkg-card{background:var(--white);border:2px solid var(--light-gray);overflow:hidden;transition:all .3s;cursor:pointer;padding:20px;text-align:center}
 .spin-pkg-card:hover{border-color:var(--gold);box-shadow:0 8px 30px rgba(0,0,0,.06)}
 .spin-pkg-card.active{border-color:var(--gold);background:linear-gradient(135deg,rgba(201,169,110,.06),rgba(184,148,79,.02))}
 .spin-pkg-card .sp-name{font-family:var(--font-serif);font-size:16px;font-weight:500;margin-bottom:8px}
 .spin-pkg-card .sp-info{font-size:12px;color:var(--gray);margin-bottom:6px;line-height:1.7}
 .spin-pkg-card .sp-commission{font-size:14px;color:var(--gold);font-weight:600;margin-bottom:12px}
+@media(min-width:769px){.spin-section{max-width:640px}}
 
 /* SPIN RESULT */
 .spin-result{position:fixed;inset:0;background:rgba(0,0,0,.7);z-index:300;display:none;align-items:center;justify-content:center;padding:20px}
@@ -846,18 +848,12 @@ async function renderHome() {
   html += buildFashionGrid();
 
   /* --- ALL PACKAGES --- */
-  const pkgImages = [
-    '',
-    'https://images.unsplash.com/photo-1543163521-1bf539c55dd2?w=600&q=80',
-    'https://images.unsplash.com/photo-1584917865442-de89df76afd3?w=600&q=80',
-    'https://images.unsplash.com/photo-1560343090-f0409e92791a?w=600&q=80',
-    'https://images.unsplash.com/photo-1606107557195-0e29a4b5b4aa?w=600&q=80'
-  ];
+  const defaultPkgImg = 'https://images.unsplash.com/photo-1445205170230-053b83016050?w=600&q=80';
   if (pkgs.length > 0) {
     html += '<div class="section-title">Danh sách gian hàng</div><div class="pkg-grid">';
     for (const p of pkgs) {
       const disabled = !p.is_unlocked;
-      const img = pkgImages[p.tier_level] || pkgImages[1];
+      const img = p.image || defaultPkgImg;
       html += '<div class="pkg-card' + (p.is_current?' current':'') + (disabled?' pkg-disabled':'') + '" style="padding:0;overflow:hidden;' + (disabled?'opacity:.65;pointer-events:none':'cursor:pointer') + '" ' + (disabled?'':'onclick="selectPkg(' + p.id + ')"') + '>';
       html += '<div style="position:relative;height:140px;overflow:hidden"><img src="' + img + '" alt="' + p.name + '" style="width:100%;height:100%;object-fit:cover;' + (disabled?'filter:grayscale(40%) brightness(.85)':'') + '"><div style="position:absolute;inset:0;background:linear-gradient(to top,rgba(0,0,0,.75) 0%,rgba(0,0,0,.15) 100%)"></div>';
       html += '<div style="position:absolute;bottom:10px;left:14px;right:14px;color:#fff;z-index:1"><div style="font-family:var(--font-serif);font-size:15px;font-weight:500;margin-bottom:2px">' + p.name + '</div>';
@@ -1195,13 +1191,7 @@ async function renderSpin() {
   lastSpinResult = null;
 
   /* Package images */
-  const spinPkgImages = [
-    '',
-    'https://images.unsplash.com/photo-1543163521-1bf539c55dd2?w=600&q=80',
-    'https://images.unsplash.com/photo-1584917865442-de89df76afd3?w=600&q=80',
-    'https://images.unsplash.com/photo-1560343090-f0409e92791a?w=600&q=80',
-    'https://images.unsplash.com/photo-1606107557195-0e29a4b5b4aa?w=600&q=80'
-  ];
+  const defaultSpinImg = 'https://images.unsplash.com/photo-1445205170230-053b83016050?w=600&q=80';
 
   let html = '<div class="spin-section">';
 
@@ -1281,7 +1271,7 @@ async function renderSpin() {
   for (const p of spinPkgs) {
     const isActive = hasActive && USER.active_package_id === p.id;
     const disabled = !p.is_unlocked;
-    const img = spinPkgImages[p.tier_level] || spinPkgImages[1];
+    const img = p.image || defaultSpinImg;
     html += '<div class="spin-pkg-card ' + (isActive?'active':'') + (disabled?' pkg-disabled':'') + '" style="' + (disabled?'opacity:.6;pointer-events:none':'cursor:pointer') + '" ' + (disabled?'':'onclick="spinSelectPkg(' + p.id + ')"') + '>';
     html += '<div style="position:relative;height:100px;overflow:hidden;margin:-20px -20px 14px;border-radius:0"><img src="' + img + '" alt="' + p.name + '" style="width:100%;height:100%;object-fit:cover;' + (disabled?'filter:grayscale(40%) brightness(.85)':'') + '"><div style="position:absolute;inset:0;background:linear-gradient(to top,rgba(0,0,0,.7) 0%,rgba(0,0,0,.1) 100%)"></div>';
     html += '<div style="position:absolute;bottom:8px;left:14px;color:#fff;z-index:1"><div class="sp-name" style="margin:0;font-size:15px">' + p.name + '</div>';
