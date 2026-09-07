@@ -7,10 +7,21 @@ const pool = mysql.createPool({
   password: process.env.DB_PASS || 'Namzee@10112002',
   database: process.env.DB_NAME || 'dior_platform',
   waitForConnections: true,
-  connectionLimit: parseInt(process.env.DB_POOL_SIZE || '20'),
+  connectionLimit: parseInt(process.env.DB_POOL_SIZE || '10'),
   charset: 'utf8mb4',
   ssl: process.env.DB_HOST && process.env.DB_HOST !== 'localhost' ? { minVersion: 'TLSv1.2', rejectUnauthorized: false } : undefined,
-  multipleStatements: false
+  multipleStatements: false,
+  idleTimeout: 30000,
+  connectTimeout: 10000,
+  enableKeepAlive: true,
+  keepAliveInitialDelay: 10000
+});
+
+pool.on('connection', (conn) => {
+  conn.query('SET SESSION innodb_lock_wait_timeout=10');
+  conn.on('error', (err) => {
+    console.error('[DB] Connection error:', err.code);
+  });
 });
 
 async function initDB() {
