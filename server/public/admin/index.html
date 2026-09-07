@@ -63,12 +63,6 @@ tr:hover{background:#fafafa}
 .checkbox-grid label{display:flex;align-items:center;gap:6px;font-size:12px;padding:6px 10px;border:1px solid var(--border);border-radius:4px;cursor:pointer;transition:all .2s}
 .checkbox-grid label:has(input:checked){border-color:var(--gold);background:rgba(201,169,110,.06)}
 .checkbox-grid input{width:auto}
-.drag-row{cursor:grab;padding:8px 12px;background:var(--white);border:1px solid var(--border);border-radius:4px;margin-bottom:4px;display:flex;align-items:center;gap:10px;font-size:13px;transition:all .15s}
-.drag-row:hover{border-color:var(--gold)}
-.drag-row.dragging{opacity:.4}
-.drag-row .grip{color:var(--gray);font-size:16px;cursor:grab}
-.drag-row .prod-name{flex:1}
-.drag-row .prod-price{color:var(--gold);font-weight:600}
 .hidden{display:none!important}
 .toast{position:fixed;top:20px;right:20px;padding:12px 20px;border-radius:8px;font-size:13px;z-index:2000;transform:translateX(120%);transition:transform .3s}
 .toast.show{transform:translateX(0)}
@@ -234,51 +228,34 @@ async function loadProducts(){
 function renderProducts(){
   let h='<div class="page-title">Sản phẩm</div>';
   h+='<div style="display:flex;gap:10px;margin-bottom:16px;align-items:center"><button class="btn btn-gold" onclick="openAddProduct()">+ Thêm sản phẩm</button></div>';
-  h+='<div class="tbl-wrap"><table><thead><tr><th>ID</th><th>Hình</th><th>Tên</th><th>Giá</th><th>Thứ tự</th><th>Trạng thái</th><th>Thao tác</th></tr></thead><tbody>';
+  h+='<div class="tbl-wrap"><table><thead><tr><th>ID</th><th>Hình</th><th>Tên</th><th>Giá</th><th>Trạng thái</th><th>Thao tác</th></tr></thead><tbody>';
   for(const p of ALL_PRODUCTS){
     const active=p.is_active?'<span class="badge badge-green">Hiện</span>':'<span class="badge badge-red">Ẩn</span>';
     const img=p.image?'<img src="'+p.image+'" style="width:40px;height:40px;object-fit:cover;border-radius:4px">':'<div style="width:40px;height:40px;background:#f0f0f0;border-radius:4px;display:flex;align-items:center;justify-content:center;font-size:10px;color:#bbb">No</div>';
-    h+='<tr><td>'+p.id+'</td><td>'+img+'</td><td><b>'+p.name+'</b></td><td>$'+parseFloat(p.price).toLocaleString()+'</td><td>'+p.sort_order+'</td><td>'+active+'</td><td><button class="btn btn-s btn-sm" onclick="openEditProduct('+p.id+')">Sửa</button> <button class="btn btn-s btn-sm" onclick="openSortProduct('+p.id+')">Thứ tự</button></td></tr>';
+    h+='<tr><td>'+p.id+'</td><td>'+img+'</td><td><b>'+p.name+'</b></td><td>$'+parseFloat(p.price).toLocaleString()+'</td><td>'+active+'</td><td><button class="btn btn-s btn-sm" onclick="openEditProduct('+p.id+')">Sửa</button> <button class="btn btn-danger btn-sm" onclick="deleteProduct('+p.id+')">Ẩn</button></td></tr>';
   }
   h+='</tbody></table></div>';
   document.getElementById('mainContent').innerHTML=h;
 }
 function openAddProduct(){
-  openModal('<h3>Thêm sản phẩm</h3><div class="fg"><label>Tên sản phẩm</label><input id="pName"></div><div class="fg"><label>Mô tả</label><textarea id="pDesc"></textarea></div><div class="fg-half"><div class="fg"><label>Giá ($)</label><input id="pPrice" type="number"></div><div class="fg"><label>Thứ tự</label><input id="pSort" type="number" value="0"></div></div><div class="fg"><label>Ảnh URL</label><input id="pImage"></div><div class="btn-row"><button class="btn btn-s" onclick="closeModal()">Hủy</button><button class="btn btn-gold" onclick="saveProduct()">Thêm</button></div>');
+  openModal('<h3>Thêm sản phẩm</h3><div class="fg"><label>Tên sản phẩm</label><input id="pName"></div><div class="fg"><label>Mô tả</label><textarea id="pDesc"></textarea></div><div class="fg"><label>Giá ($)</label><input id="pPrice" type="number"></div><div class="fg"><label>Ảnh URL</label><input id="pImage"></div><div class="btn-row"><button class="btn btn-s" onclick="closeModal()">Hủy</button><button class="btn btn-gold" onclick="saveProduct()">Thêm</button></div>');
 }
 async function saveProduct(){
   const name=document.getElementById('pName').value.trim();
   const price=parseFloat(document.getElementById('pPrice').value);
   if(!name||!price){toast('Thiếu tên hoặc giá','err');return}
-  const d=await apiPost('/admin/products',{name,description:document.getElementById('pDesc').value,price,image:document.getElementById('pImage').value,sort_order:parseInt(document.getElementById('pSort').value)||0});
+  const d=await apiPost('/admin/products',{name,description:document.getElementById('pDesc').value,price,image:document.getElementById('pImage').value});
   if(d){toast('Đã thêm sản phẩm');closeModal();loadProducts()}
 }
 function openEditProduct(id){
   const p=ALL_PRODUCTS.find(x=>x.id===id);if(!p)return;
-  openModal('<h3>Sửa sản phẩm</h3><div class="fg"><label>Tên</label><input id="pName" value="'+p.name+'"></div><div class="fg"><label>Mô tả</label><textarea id="pDesc">'+(p.description||'')+'</textarea></div><div class="fg-half"><div class="fg"><label>Giá ($)</label><input id="pPrice" type="number" value="'+p.price+'"></div><div class="fg"><label>Thứ tự</label><input id="pSort" type="number" value="'+p.sort_order+'"></div></div><div class="fg"><label>Ảnh URL</label><input id="pImage" value="'+(p.image||'')+'"></div><div class="btn-row"><button class="btn btn-s" onclick="closeModal()">Hủy</button><button class="btn btn-gold" onclick="updateProduct('+id+')">Cập nhật</button></div>');
+  openModal('<h3>Sửa sản phẩm</h3><div class="fg"><label>Tên</label><input id="pName" value="'+p.name+'"></div><div class="fg"><label>Mô tả</label><textarea id="pDesc">'+(p.description||'')+'</textarea></div><div class="fg"><label>Giá ($)</label><input id="pPrice" type="number" value="'+p.price+'"></div><div class="fg"><label>Ảnh URL</label><input id="pImage" value="'+(p.image||'')+'"></div><div class="btn-row"><button class="btn btn-s" onclick="closeModal()">Hủy</button><button class="btn btn-gold" onclick="updateProduct('+id+')">Cập nhật</button></div>');
 }
 async function updateProduct(id){
-  const d=await apiPut('/admin/products/'+id,{name:document.getElementById('pName').value,description:document.getElementById('pDesc').value,price:parseFloat(document.getElementById('pPrice').value),image:document.getElementById('pImage').value,sort_order:parseInt(document.getElementById('pSort').value)||0});
+  const d=await apiPut('/admin/products/'+id,{name:document.getElementById('pName').value,description:document.getElementById('pDesc').value,price:parseFloat(document.getElementById('pPrice').value),image:document.getElementById('pImage').value});
   if(d){toast('Đã cập nhật');closeModal();loadProducts()}
 }
-function openSortProduct(id){
-  const p=ALL_PRODUCTS.find(x=>x.id===id);if(!p)return;
-  const sortedProducts=[...ALL_PRODUCTS].sort((a,b)=>a.sort_order-b.sort_order);
-  let rows='';
-  for(const pp of sortedProducts){rows+='<div class="drag-row" draggable="true" data-id="'+pp.id+'"><span class="grip">⠿</span><span class="prod-name">'+pp.name+'</span><span class="prod-price">$'+parseFloat(pp.price).toLocaleString()+'</span></div>';}
-  openModal('<h3>Sắp xếp thứ tự sản phẩm</h3><p style="font-size:12px;color:var(--gray);margin-bottom:12px">Kéo thả để sắp xếp thứ tự sản phẩm được quay ra</p><div id="sortList">'+rows+'</div><div class="btn-row"><button class="btn btn-s" onclick="closeModal()">Hủy</button><button class="btn btn-gold" onclick="saveSortOrder()">Lưu thứ tự</button></div>');
-  initDrag();
-}
-function initDrag(){
-  const list=document.getElementById('sortList');if(!list)return;let dragEl=null;
-  list.querySelectorAll('.drag-row').forEach(row=>{row.addEventListener('dragstart',e=>{dragEl=row;row.classList.add('dragging')});row.addEventListener('dragend',()=>{dragEl&&dragEl.classList.remove('dragging');dragEl=null});row.addEventListener('dragover',e=>{e.preventDefault();if(dragEl&&dragEl!==row){const rect=row.getBoundingClientRect();const mid=rect.top+rect.height/2;list.insertBefore(dragEl,e.clientY<mid?row:row.nextSibling)}});});
-}
-async function saveSortOrder(){
-  const rows=document.querySelectorAll('#sortList .drag-row');
-  const orders=[...rows].map((r,i)=>({product_id:parseInt(r.dataset.id),sort_order:i+1}));
-  const d=await apiPut('/admin/products-sort',{product_orders:orders});
-  if(d){toast('Đã cập nhật thứ tự');closeModal();loadProducts()}
-}
+async function deleteProduct(id){showConfirmPopup('Ẩn sản phẩm này?',async()=>{const d=await apiDel('/admin/products/'+id);if(d)loadProducts()})}
 // ===== PACKAGES =====
 async function loadPackages(){
   const d=await apiGet('/admin/packages');
