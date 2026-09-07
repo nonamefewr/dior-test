@@ -284,7 +284,7 @@ async function loadUsers(search){
   h+='<div class="tbl-wrap"><table><thead><tr><th>ID</th><th>Username</th><th>Họ tên</th><th>Mã mời</th><th>Số dư</th><th>Đang khóa</th><th>Đơn hiện tại</th><th>Trạng thái</th><th>Thao tác</th></tr></thead><tbody>';
   for(const u of users){
     const status=u.is_active?'<span class="badge badge-green">Hoạt động</span>':'<span class="badge badge-red">Khóa</span>';
-    h+='<tr><td>'+u.id+'</td><td><b>'+u.username+'</b></td><td>'+u.full_name+'</td><td style="font-weight:700;letter-spacing:1px">'+u.ref_code+'</td><td>$'+parseFloat(u.balance).toFixed(2)+'</td><td style="color:var(--gold)">$'+parseFloat(u.locked_amount||0).toFixed(2)+'</td><td>#'+(u.current_order_num||0)+'</td><td>'+status+'</td><td><button class="btn btn-s btn-sm" onclick="viewUser('+u.id+')">Chi tiết</button></td></tr>';
+    h+='<tr><td>'+u.id+'</td><td><b>'+u.username+'</b></td><td>'+u.full_name+'</td><td><div style="display:flex;align-items:center;gap:6px"><span style="font-weight:700;letter-spacing:1px">'+u.ref_code+'</span><button class="btn btn-gold btn-sm" onclick="copyRefLink(\''+u.ref_code+'\')" style="font-size:10px;padding:2px 8px;white-space:nowrap">Copy link</button></div></td><td>$'+parseFloat(u.balance).toFixed(2)+'</td><td style="color:var(--gold)">$'+parseFloat(u.locked_amount||0).toFixed(2)+'</td><td>#'+(u.current_order_num||0)+'</td><td>'+status+'</td><td><button class="btn btn-s btn-sm" onclick="viewUser('+u.id+')">Chi tiết</button></td></tr>';
   }
   h+='</tbody></table></div>';
   document.getElementById('mainContent').innerHTML=h;
@@ -293,6 +293,7 @@ function openAddUser(){
   openModal('<h3>Thêm người dùng mới</h3><div class="fg-half"><div class="fg"><label>Username *</label><input id="uUsername"></div><div class="fg"><label>Họ tên</label><input id="uNameAdd"></div></div><div class="fg-half"><div class="fg"><label>Số điện thoại</label><input id="uPhoneAdd"></div><div class="fg"><label>Mật khẩu</label><input id="uPassAdd" type="password" value="user123"></div></div><div class="fg"><label>Số dư ban đầu ($)</label><input id="uBalanceAdd" type="number" step="0.01" value="0"></div><div class="btn-row"><button class="btn btn-s" onclick="closeModal()">Hủy</button><button class="btn btn-gold" onclick="saveAddUser()">Tạo tài khoản</button></div>');
 }
 async function saveAddUser(){const b={username:document.getElementById('uUsername').value,full_name:document.getElementById('uNameAdd').value,phone:document.getElementById('uPhoneAdd').value,password:document.getElementById('uPassAdd').value,balance:parseFloat(document.getElementById('uBalanceAdd').value)||0};const d=await apiPost('/admin/users',b);if(d){toast('Mã mời: '+(d.data?.ref_code||''));closeModal();loadUsers()}}
+function copyRefLink(code){const link=location.origin+'/register?ref='+code;navigator.clipboard.writeText(link).then(()=>toast('Đã copy link mời: '+link)).catch(()=>{prompt('Copy link đăng ký:',link)})}
 
 // ===== USER DETAIL =====
 let currentUserId=null;

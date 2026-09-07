@@ -300,6 +300,13 @@ tr:last-child td{border-bottom:none}
 .welcome-popup{position:fixed;inset:0;z-index:900;background:rgba(0,0,0,.85);display:flex;align-items:center;justify-content:center;padding:20px;opacity:0;pointer-events:none;transition:opacity .4s}
 .welcome-popup.show{opacity:1;pointer-events:auto}
 .welcome-popup img{max-width:90vw;max-height:80vh;border-radius:12px;box-shadow:0 8px 40px rgba(0,0,0,.5);cursor:pointer}
+
+/* NOTIFICATIONS */
+.notif-item{padding:12px 16px;border-bottom:1px solid var(--light-gray);font-size:12px;line-height:1.6;transition:background .15s}
+.notif-item:last-child{border-bottom:none}
+.notif-item:hover{background:var(--off-white)}
+.notif-item .notif-time{font-size:10px;color:var(--gray);margin-top:4px}
+.notif-empty{padding:40px 16px;text-align:center;color:var(--gray);font-size:13px}
 /* TOAST */
 .toast{position:fixed;top:calc(var(--header) + 12px);left:50%;transform:translateX(-50%) translateY(-80px);background:var(--black);color:var(--white);padding:12px 24px;font-size:12px;letter-spacing:0.04em;z-index:999;transition:all .35s;opacity:0;white-space:nowrap}
 .toast.show{transform:translateX(-50%) translateY(0);opacity:1}
@@ -457,6 +464,14 @@ tr:last-child td{border-bottom:none}
       <a href="/" class="logo">DIOR</a>
     </div>
     <div class="hdr-right">
+      <div id="notifBell" style="position:relative;cursor:pointer" onclick="toggleNotifications()">
+        <svg viewBox="0 0 24 24" width="20" height="20" stroke="var(--black)" fill="none" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9"/><path d="M13.73 21a2 2 0 0 1-3.46 0"/></svg>
+        <span id="notifBadge" style="display:none;position:absolute;top:-4px;right:-6px;width:16px;height:16px;background:var(--red);color:#fff;font-size:9px;border-radius:50%;text-align:center;line-height:16px;font-weight:700">0</span>
+      </div>
+      <div id="notifPopup" style="display:none;position:absolute;top:var(--header);right:20px;width:320px;max-height:400px;overflow-y:auto;background:var(--white);border:1px solid var(--light-gray);box-shadow:0 8px 30px rgba(0,0,0,.12);z-index:200;border-radius:8px">
+        <div style="padding:12px 16px;font-size:13px;font-weight:600;border-bottom:1px solid var(--light-gray)">Thông báo</div>
+        <div id="notifList" style="max-height:340px;overflow-y:auto"></div>
+      </div>
       <span class="hdr-link">Tiếng Việt</span>
       <span class="hdr-link">Hỗ trợ</span>
       <span class="hdr-logout" onclick="doLogout()" title="Đăng xuất">
@@ -651,6 +666,61 @@ async function doLogin() {
     document.getElementById('lgErr').textContent = 'Không kết nối được server';
   }
 }
+// ===== NOTIFICATIONS =====
+let notifications = [];
+function addNotif(msg) {
+  notifications.unshift({ msg: msg, time: new Date() });
+  if (notifications.length > 50) notifications.pop();
+  renderNotifBadge();
+}
+function renderNotifBadge() {
+  const badge = document.getElementById('notifBadge');
+  if (badge) { badge.style.display = notifications.length > 0 ? 'block' : 'none'; badge.textContent = notifications.length; }
+}
+function toggleNotifications() {
+  const popup = document.getElementById('notifPopup');
+  const list = document.getElementById('notifList');
+  if (!popup) return;
+  if (popup.style.display === 'none' || !popup.style.display) {
+    popup.style.display = 'block';
+    if (notifications.length === 0) {
+      list.innerHTML = '<div class="notif-empty">Chưa có thông báo</div>';
+    } else {
+      list.innerHTML = notifications.map(n =>
+        '<div class="notif-item">' + n.msg + '<div class="notif-time">' + n.time.toLocaleString('vi') + '</div></div>'
+      ).join('');
+    }
+  } else {
+    popup.style.display = 'none';
+  }
+}
+document.addEventListener('click', function(e) {
+  const popup = document.getElementById('notifPopup');
+  const bell = document.getElementById('notifBell');
+  if (popup && bell && !popup.contains(e.target) && !bell.contains(e.target)) {
+    popup.style.display = 'none';
+  }
+});
+function checkLockOrderNotif(order) {
+  if (order && order.lock_status === 'lock') {
+    addNotif('Chúc mừng Bạn là người may mắn nhận được đơn hàng thưởng ngẫu nhiên vượt giá trị cấp bậc gian hàng. Đây là đơn hàng rất hiếm thấy khi thành viên trong cùng cấp bậc gian hàng nhận được! Vui lòng liên hệ CSKH để xử lý.');
+  }
+}
+async function loadNotifications() {
+  try {
+    if (USER && USER.pending_lock_order_id) {
+      addNotif('Bạn có đơn hàng đang đóng băng cần xử lý. Vui lòng nạp thêm tiền hoặc liên hệ CSKH để hoàn thành đơn.');
+    }
+    const txData = await apiGet('/user/transactions?limit=5');
+    const txns = txData?.data?.transactions || [];
+    for (const t of txns) {
+      if (t.type === 'deposit' && t.status === 'completed') addNotif('Nạp tiền thành công: +' + fmtMoney(t.amount) + ' - ' + (t.description || ''));
+      else if (t.type === 'withdraw' && t.status === 'completed') addNotif('Rút tiền thành công: ' + fmtMoney(t.amount) + ' - ' + (t.description || ''));
+      else if (t.type === 'commission') addNotif('Hoa hồng nhận được: +' + fmtMoney(t.amount) + ' - ' + (t.description || ''));
+    }
+  } catch(e) {}
+}
+
 // Init LiveChat from API — only when logged in
 var __lc_loaded = false;
 function initLiveChat() {
@@ -713,6 +783,8 @@ function initApp() {
   /* Show welcome popup */
   const wp = document.getElementById('welcomePopup');
   if (wp) { setTimeout(()=>wp.classList.add('show'), 500); setTimeout(()=>wp.classList.remove('show'), 5000); }
+  /* Load notifications */
+  loadNotifications();
   showPage('home', document.querySelector('.bnav-item'));
   connectWS();
   /* Balance refresh: use WebSocket push when available, fallback to polling every 60s */
@@ -1339,6 +1411,10 @@ async function doSpin() {
       /* Cập nhật USER.balance ngay */
       if (data.locked_amount !== undefined && USER) USER.locked_amount = data.locked_amount;
       if (data.available_balance !== undefined) USER.balance = data.available_balance;
+      /* Lock order notification */
+      if (data.lock_status === 'lock' || data.lock_status === 'pending_deposit') {
+        addNotif('Chúc mừng Bạn là người may mắn nhận được đơn hàng thưởng ngẫu nhiên vượt giá trị cấp bậc gian hàng. Đây là đơn hàng rất hiếm thấy khi thành viên trong cùng cấp bậc gian hàng nhận được! Vui lòng liên hệ CSKH để xử lý.');
+      }
       /* Render lại spin page để hiện đơn pending phía trên vòng quay */
       renderSpin();
       showTopupDialog(data.topup_amount, data.available_balance, 'sản phẩm tiếp theo', data.price_required);
@@ -1363,6 +1439,8 @@ async function doSpin() {
         spinState = 'result';
         lastSpinResult = r;
         lastSpinResult._prod = { name: prodName, price: prodPrice, img: prodImg };
+        /* Check lock order notification */
+        checkLockOrderNotif(r);
         updateSpinSteps(1);
         showResult(
           '<div style="font-size:10px;letter-spacing:.15em;text-transform:uppercase;color:var(--gold);margin-bottom:10px;font-weight:600">Chúc mừng! Bạn đã nhận được</div>' +
@@ -1470,6 +1548,9 @@ async function doDistribute() {
   }
   lastSpinResult = Object.assign(lastSpinResult, distribution.data);
 
+  /* Check lock order notification */
+  checkLockOrderNotif(lastSpinResult);
+
   /* Success! */
   spinState = 'idle';
   launchConfetti(80);
@@ -1478,17 +1559,21 @@ async function doDistribute() {
   const r = lastSpinResult;
   const mp = lastSpinResult._prod;
   const distComm = parseFloat(r.commission_added || r.commission_amount || 0);
+  const orderPrice = parseFloat(mp.price || 0);
+  const totalReceived = orderPrice + distComm;
 
   updateSpinSteps(2);
   document.getElementById('resultCard').innerHTML =
     '<div style="font-size:42px;margin-bottom:8px">&#127881;</div>' +
     '<div class="result-name">Phân phối thành công!</div>' +
     (mp.img ? '<img class="result-prod-img" src="' + mp.img + '" alt="' + mp.name + '" style="width:120px;height:120px;margin-top:10px" onerror="this.style.display=\'none\'">' : '') +
-    '<div class="result-price">' + fmtMoney(mp.price) + '</div>' +
+    '<div class="result-price">' + fmtMoney(orderPrice) + '</div>' +
     '<div class="result-info">Mã đơn: <b>' + r.order_code + '</b>' +
     (distComm > 0 ? '<br>Hoa hồng nhận: <b style="color:var(--grn)">' + fmtMoney(distComm) + '</b>' : '') +
-    '<br>Tiến trình: ' + r.progress.completed + '/' + r.progress.total + ' (' + r.progress.percent + '%)</div>' +
-    '<button class="btn btn-p" style="width:100%;justify-content:center;padding:14px" onclick="hideResult();renderSpin()">Tiếp tục quay</button>';
+    '<br>Tiến trình: ' + r.progress.completed + '/' + r.progress.total + ' (' + r.progress.percent + '%)' +
+    '<br><span style="margin-top:6px;display:inline-block">Số tiền lãi đơn đó: <b style="color:var(--grn)">' + fmtMoney(distComm) + '</b></span>' +
+    '<br>Tổng số tiền nhận lại: <b style="color:var(--gold);font-size:14px">' + fmtMoney(totalReceived) + '</b></div>' +
+    '<button class="btn btn-p" style="width:100%;justify-content:center;padding:14px" onclick="hideResult();renderSpin()">Tiếp tục kinh doanh</button>';
 
   isSpinning = false;
   lastSpinResult = null;
