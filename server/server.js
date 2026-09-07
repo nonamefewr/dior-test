@@ -258,7 +258,7 @@ app.get('/api/packages', authMiddleware, async (req, res) => {
     if (cached) return res.json(success(cached));
     const [packages] = await pool.query(
       `SELECT p.*,
-        (SELECT COUNT(DISTINCT pp.product_id) FROM package_products pp JOIN products pr ON pp.product_id=pr.id WHERE pp.package_id=p.id AND pp.is_active=1 AND pr.is_active=1) as product_count
+        (SELECT COUNT(*) FROM products WHERE is_active=1) as product_count
        FROM packages p WHERE p.is_active=1 ORDER BY p.tier_level ASC`
     );
     cacheSet('packages_list', packages, 60000);
@@ -268,7 +268,8 @@ app.get('/api/packages', authMiddleware, async (req, res) => {
 
 app.get('/api/packages/:id/products', authMiddleware, async (req, res) => {
   try {
-    const [products] = await pool.query('SELECT pr.* FROM products pr JOIN package_products pp ON pr.id=pp.product_id WHERE pp.package_id=? AND pp.is_active=1 AND pr.is_active=1 ORDER BY pp.sort_order ASC', [req.params.id]);
+    // Products are shared across all packages — just return active ones
+    const [products] = await pool.query('SELECT * FROM products WHERE is_active=1 ORDER BY sort_order ASC');
     res.json(success(products));
   } catch(e) { res.status(500).json(fail('Lỗi server')); }
 });
@@ -281,7 +282,7 @@ app.get('/api/user/packages', authMiddleware, async (req, res) => {
     // Single query: packages + product counts (subquery) + user progress (LEFT JOIN)
     const [packages] = await pool.query(
       `SELECT p.*,
-        (SELECT COUNT(DISTINCT pp.product_id) FROM package_products pp JOIN products pr ON pp.product_id=pr.id WHERE pp.package_id=p.id AND pp.is_active=1 AND pr.is_active=1) as product_count,
+        (SELECT COUNT(*) FROM products WHERE is_active=1) as product_count,
         upp.completed_orders as prog_completed, upp.total_spent as prog_spent, upp.status as prog_status
        FROM packages p
        LEFT JOIN user_package_progress upp ON upp.package_id=p.id AND upp.user_id=? AND upp.status='active'
@@ -1182,7 +1183,7 @@ app.get('/api/admin/packages', authMiddleware, adminMiddleware, async (req, res)
   try {
     const [pkgs] = await pool.query(
       `SELECT p.*,
-        (SELECT COUNT(DISTINCT pp.product_id) FROM package_products pp JOIN products pr ON pp.product_id=pr.id WHERE pp.package_id=p.id AND pp.is_active=1 AND pr.is_active=1) as product_count,
+        (SELECT COUNT(*) FROM products WHERE is_active=1) as product_count,
         (SELECT COUNT(*) FROM users u WHERE u.active_package_id=p.id) as user_count
        FROM packages p ORDER BY p.tier_level ASC`
     );
@@ -1235,47 +1236,29 @@ app.delete('/api/admin/packages/:id', authMiddleware, adminMiddleware, async (re
   } catch(e) { res.status(500).json(fail('Lỗi server')); }
 });
 
-// Admin Products CRUD
-// ===== ADMIN PRODUCTS (junction table based) =====
+// Admin Products CRUD (shared products — no package assignment)
 app.get('/api/admin/products', authMiddleware, adminMiddleware, async (req, res) => {
   try {
-    const { package_id } = req.query;
-    let query, params = [];
-    if (package_id) {
-      query = 'SELECT pr.*, pp.sort_order as pkg_sort, pp.is_active as pkg_active, pk.name as package_name FROM products pr JOIN package_products pp ON pr.id=pp.product_id JOIN packages pk ON pp.package_id=pk.id WHERE pp.package_id=? ORDER BY pp.sort_order ASC';
-      params = [package_id];
-    } else {
-      query = 'SELECT pr.*, GROUP_CONCAT(DISTINCT pk.name SEPARATOR ", ") as package_names, GROUP_CONCAT(DISTINCT pp.package_id) as package_ids FROM products pr LEFT JOIN package_products pp ON pr.id=pp.product_id LEFT JOIN packages pk ON pp.package_id=pk.id GROUP BY pr.id ORDER BY pr.sort_order ASC';
-    }
-    const [products] = await pool.query(query, params);
+    const [products] = await pool.query('SELECT * FROM products ORDER BY sort_order ASC');
     res.json(success(products));
   } catch(e) { res.status(500).json(fail('Lỗi server')); }
 });
 
 app.post('/api/admin/products', authMiddleware, adminMiddleware, async (req, res) => {
   try {
-    const { name, description, image, price, sort_order, package_ids } = req.body;
+    const { name, description, image, price, sort_order } = req.body;
     if (!name || !price) return res.status(400).json(fail('Thiếu thông tin bắt buộc'));
     const [result] = await pool.query(
       'INSERT INTO products (name,description,image,price,sort_order,is_active) VALUES (?,?,?,?,?,1)',
       [sanitize(name), sanitize(description||''), sanitize(image||''), parseFloat(price), sort_order||0]
     );
-    const productId = result.insertId;
-    if (Array.isArray(package_ids) && package_ids.length > 0) {
-      for (const pid of package_ids) {
-        await pool.query(
-          'INSERT INTO package_products (package_id, product_id, sort_order, is_active) VALUES (?,?,?,1) ON DUPLICATE KEY UPDATE sort_order=VALUES(sort_order)',
-          [pid, productId, sort_order || 0]
-        );
-      }
-    }
-    res.json(success({ id: productId }, 'Đã thêm sản phẩm'));
+    res.json(success({ id: result.insertId }, 'Đã thêm sản phẩm'));
   } catch(e) { res.status(500).json(fail('Lỗi server')); }
 });
 
 app.put('/api/admin/products/:id', authMiddleware, adminMiddleware, async (req, res) => {
   try {
-    const { name, description, image, price, is_active, sort_order, package_ids } = req.body;
+    const { name, description, image, price, is_active, sort_order } = req.body;
     const updates = [];
     const params = [];
     if (name !== undefined) { updates.push('name=?'); params.push(sanitize(name)); }
@@ -1284,19 +1267,9 @@ app.put('/api/admin/products/:id', authMiddleware, adminMiddleware, async (req, 
     if (price !== undefined) { updates.push('price=?'); params.push(parseFloat(price)); }
     if (is_active !== undefined) { updates.push('is_active=?'); params.push(is_active ? 1 : 0); }
     if (sort_order !== undefined) { updates.push('sort_order=?'); params.push(sort_order); }
-    if (updates.length > 0) {
-      params.push(req.params.id);
-      await pool.query('UPDATE products SET ' + updates.join(',') + ' WHERE id=?', params);
-    }
-    if (Array.isArray(package_ids)) {
-      await pool.query('DELETE FROM package_products WHERE product_id=?', [req.params.id]);
-      for (let i = 0; i < package_ids.length; i++) {
-        await pool.query(
-          'INSERT INTO package_products (package_id, product_id, sort_order, is_active) VALUES (?,?,?,1)',
-          [package_ids[i], req.params.id, sort_order || i + 1]
-        );
-      }
-    }
+    if (updates.length === 0) return res.status(400).json(fail('Không có gì để cập nhật'));
+    params.push(req.params.id);
+    await pool.query('UPDATE products SET ' + updates.join(',') + ' WHERE id=?', params);
     res.json(success(null, 'Đã cập nhật'));
   } catch(e) { res.status(500).json(fail('Lỗi server')); }
 });
@@ -1304,58 +1277,19 @@ app.put('/api/admin/products/:id', authMiddleware, adminMiddleware, async (req, 
 app.delete('/api/admin/products/:id', authMiddleware, adminMiddleware, async (req, res) => {
   try {
     await pool.query('UPDATE products SET is_active=0 WHERE id=?', [req.params.id]);
-    await pool.query('UPDATE package_products SET is_active=0 WHERE product_id=?', [req.params.id]);
     res.json(success(null, 'Đã ẩn sản phẩm'));
   } catch(e) { res.status(500).json(fail('Lỗi server')); }
 });
 
-// ===== ADMIN: Sort products within a package =====
+// Sort products globally
 app.put('/api/admin/products-sort', authMiddleware, adminMiddleware, async (req, res) => {
   try {
-    const { package_id, product_orders } = req.body;
-    if (!package_id || !Array.isArray(product_orders)) return res.status(400).json(fail('Thiếu thông tin'));
+    const { product_orders } = req.body;
+    if (!Array.isArray(product_orders)) return res.status(400).json(fail('Thiếu thông tin'));
     for (const item of product_orders) {
-      await pool.query('UPDATE package_products SET sort_order=? WHERE package_id=? AND product_id=?',
-        [item.sort_order, package_id, item.product_id]);
+      await pool.query('UPDATE products SET sort_order=? WHERE id=?', [item.sort_order, item.product_id]);
     }
     res.json(success(null, 'Đã cập nhật thứ tự'));
-  } catch(e) { res.status(500).json(fail('Lỗi server')); }
-});
-
-// ===== ADMIN: Assign product to multiple packages =====
-app.post('/api/admin/products/:id/assign', authMiddleware, adminMiddleware, async (req, res) => {
-  try {
-    const { package_ids } = req.body;
-    if (!Array.isArray(package_ids)) return res.status(400).json(fail('Thiếu danh sách gian hàng'));
-    await pool.query('DELETE FROM package_products WHERE product_id=?', [req.params.id]);
-    for (let i = 0; i < package_ids.length; i++) {
-      await pool.query(
-        'INSERT INTO package_products (package_id, product_id, sort_order, is_active) VALUES (?,?,?,1)',
-        [package_ids[i], req.params.id, i + 1]
-      );
-    }
-    res.json(success(null, 'Đã gắn sản phẩm vào gian hàng'));
-  } catch(e) { res.status(500).json(fail('Lỗi server')); }
-});
-
-// ADMIN: Batch assign products to a package
-app.post('/api/admin/products/assign-batch', authMiddleware, adminMiddleware, async (req, res) => {
-  try {
-    const { package_id, product_ids } = req.body;
-    if (!package_id || !Array.isArray(product_ids)) return res.status(400).json(fail('Thiếu thông tin'));
-    const [existing] = await pool.query('SELECT product_id FROM package_products WHERE package_id=?', [package_id]);
-    const existingIds = new Set(existing.map(r => r.product_id));
-    let count = 0;
-    for (const pid of product_ids) {
-      if (existingIds.has(pid)) continue;
-      const [maxRow] = await pool.query('SELECT COALESCE(MAX(sort_order),0)+1 as nextSort FROM package_products WHERE package_id=?', [package_id]);
-      await pool.query(
-        'INSERT INTO package_products (package_id, product_id, sort_order, is_active) VALUES (?,?,?,1)',
-        [package_id, pid, maxRow[0].nextSort + count]
-      );
-      count++;
-    }
-    res.json(success({ added: count }, 'Đã thêm ' + count + ' sản phẩm'));
   } catch(e) { res.status(500).json(fail('Lỗi server')); }
 });
 

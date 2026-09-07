@@ -231,87 +231,60 @@ async function loadProducts(){
   ALL_PACKAGES=(pkgData?.data)||[];
   renderProducts();
 }
-function renderProducts(filterPkg=''){
-  let filtered=ALL_PRODUCTS;
-  if(filterPkg)filtered=filtered.filter(p=>(p.package_ids||'').split(',').includes(String(filterPkg)));
-  let pkgOpts='<option value="">Tất cả gian hàng</option>';
-  for(const p of ALL_PACKAGES)pkgOpts+='<option value="'+p.id+'">'+p.name+'</option>';
+function renderProducts(){
   let h='<div class="page-title">Sản phẩm</div>';
-  h+='<div style="display:flex;gap:10px;margin-bottom:16px;align-items:center"><select id="prodFilter" onchange="renderProducts(this.value)" style="width:200px">'+pkgOpts+'</select><button class="btn btn-gold" onclick="openAddProduct()">+ Thêm sản phẩm</button></div>';
-  h+='<div class="tbl-wrap"><table><thead><tr><th>ID</th><th>Hình</th><th>Tên</th><th>Giá</th><th>Gian hàng</th><th>Thứ tự</th><th>Trạng thái</th><th>Thao tác</th></tr></thead><tbody>';
-  for(const p of filtered){
-    const pkgs=p.package_names||'Chưa gán';
+  h+='<div style="display:flex;gap:10px;margin-bottom:16px;align-items:center"><button class="btn btn-gold" onclick="openAddProduct()">+ Thêm sản phẩm</button></div>';
+  h+='<div class="tbl-wrap"><table><thead><tr><th>ID</th><th>Hình</th><th>Tên</th><th>Giá</th><th>Thứ tự</th><th>Trạng thái</th><th>Thao tác</th></tr></thead><tbody>';
+  for(const p of ALL_PRODUCTS){
     const active=p.is_active?'<span class="badge badge-green">Hiện</span>':'<span class="badge badge-red">Ẩn</span>';
     const img=p.image?'<img src="'+p.image+'" style="width:40px;height:40px;object-fit:cover;border-radius:4px">':'<div style="width:40px;height:40px;background:#f0f0f0;border-radius:4px;display:flex;align-items:center;justify-content:center;font-size:10px;color:#bbb">No</div>';
-    h+='<tr><td>'+p.id+'</td><td>'+img+'</td><td><b>'+p.name+'</b></td><td>$'+parseFloat(p.price).toLocaleString()+'</td><td style="font-size:11px">'+pkgs+'</td><td>'+p.sort_order+'</td><td>'+active+'</td><td><button class="btn btn-s btn-sm" onclick="openEditProduct('+p.id+')">Sửa</button> <button class="btn btn-s btn-sm" onclick="openSortProduct('+p.id+')">Thứ tự</button> <button class="btn btn-s btn-sm" onclick="openAssignProduct('+p.id+')">Gán gian</button></td></tr>';
+    h+='<tr><td>'+p.id+'</td><td>'+img+'</td><td><b>'+p.name+'</b></td><td>$'+parseFloat(p.price).toLocaleString()+'</td><td>'+p.sort_order+'</td><td>'+active+'</td><td><button class="btn btn-s btn-sm" onclick="openEditProduct('+p.id+')">Sửa</button> <button class="btn btn-s btn-sm" onclick="openSortProduct('+p.id+')">Thứ tự</button></td></tr>';
   }
   h+='</tbody></table></div>';
   document.getElementById('mainContent').innerHTML=h;
 }
 function openAddProduct(){
-  let pkgChecks='';
-  for(const p of ALL_PACKAGES)pkgChecks+='<label><input type="checkbox" value="'+p.id+'" name="pkg">'+p.name+'</label>';
-  openModal('<h3>Thêm sản phẩm</h3><div class="fg"><label>Tên sản phẩm</label><input id="pName"></div><div class="fg"><label>Mô tả</label><textarea id="pDesc"></textarea></div><div class="fg-half"><div class="fg"><label>Giá ($)</label><input id="pPrice" type="number"></div><div class="fg"><label>Thứ tự</label><input id="pSort" type="number" value="0"></div></div><div class="fg"><label>Ảnh URL</label><input id="pImage"></div><div class="fg"><label>Gian hàng</label><div class="checkbox-grid" id="pPkgs">'+pkgChecks+'</div></div><div class="btn-row"><button class="btn btn-s" onclick="closeModal()">Hủy</button><button class="btn btn-gold" onclick="saveProduct()">Thêm</button></div>');
+  openModal('<h3>Thêm sản phẩm</h3><div class="fg"><label>Tên sản phẩm</label><input id="pName"></div><div class="fg"><label>Mô tả</label><textarea id="pDesc"></textarea></div><div class="fg-half"><div class="fg"><label>Giá ($)</label><input id="pPrice" type="number"></div><div class="fg"><label>Thứ tự</label><input id="pSort" type="number" value="0"></div></div><div class="fg"><label>Ảnh URL</label><input id="pImage"></div><div class="btn-row"><button class="btn btn-s" onclick="closeModal()">Hủy</button><button class="btn btn-gold" onclick="saveProduct()">Thêm</button></div>');
 }
 async function saveProduct(){
   const name=document.getElementById('pName').value.trim();
   const price=parseFloat(document.getElementById('pPrice').value);
   if(!name||!price){toast('Thiếu tên hoặc giá','err');return}
-  const pkg_ids=[...document.querySelectorAll('#pPkgs input:checked')].map(c=>parseInt(c.value));
-  const d=await apiPost('/admin/products',{name,description:document.getElementById('pDesc').value,price,image:document.getElementById('pImage').value,sort_order:parseInt(document.getElementById('pSort').value)||0,package_ids:pkg_ids});
+  const d=await apiPost('/admin/products',{name,description:document.getElementById('pDesc').value,price,image:document.getElementById('pImage').value,sort_order:parseInt(document.getElementById('pSort').value)||0});
   if(d){toast('Đã thêm sản phẩm');closeModal();loadProducts()}
 }
 function openEditProduct(id){
   const p=ALL_PRODUCTS.find(x=>x.id===id);if(!p)return;
-  let pkgChecks='';
-  const currentIds=(p.package_ids||'').split(',').map(s=>parseInt(s));
-  for(const pk of ALL_PACKAGES){const checked=currentIds.includes(pk.id)?'checked':'';pkgChecks+='<label><input type="checkbox" value="'+pk.id+'" name="pkg" '+checked+'>'+pk.name+'</label>';}
-  openModal('<h3>Sửa sản phẩm</h3><div class="fg"><label>Tên</label><input id="pName" value="'+p.name+'"></div><div class="fg"><label>Mô tả</label><textarea id="pDesc">'+(p.description||'')+'</textarea></div><div class="fg-half"><div class="fg"><label>Giá ($)</label><input id="pPrice" type="number" value="'+p.price+'"></div><div class="fg"><label>Thứ tự</label><input id="pSort" type="number" value="'+p.sort_order+'"></div></div><div class="fg"><label>Ảnh URL</label><input id="pImage" value="'+(p.image||'')+'"></div><div class="fg"><label>Gian hàng</label><div class="checkbox-grid" id="pPkgs">'+pkgChecks+'</div></div><div class="btn-row"><button class="btn btn-s" onclick="closeModal()">Hủy</button><button class="btn btn-gold" onclick="updateProduct('+id+')">Cập nhật</button></div>');
+  openModal('<h3>Sửa sản phẩm</h3><div class="fg"><label>Tên</label><input id="pName" value="'+p.name+'"></div><div class="fg"><label>Mô tả</label><textarea id="pDesc">'+(p.description||'')+'</textarea></div><div class="fg-half"><div class="fg"><label>Giá ($)</label><input id="pPrice" type="number" value="'+p.price+'"></div><div class="fg"><label>Thứ tự</label><input id="pSort" type="number" value="'+p.sort_order+'"></div></div><div class="fg"><label>Ảnh URL</label><input id="pImage" value="'+(p.image||'')+'"></div><div class="btn-row"><button class="btn btn-s" onclick="closeModal()">Hủy</button><button class="btn btn-gold" onclick="updateProduct('+id+')">Cập nhật</button></div>');
 }
 async function updateProduct(id){
-  const pkg_ids=[...document.querySelectorAll('#pPkgs input:checked')].map(c=>parseInt(c.value));
-  const d=await apiPut('/admin/products/'+id,{name:document.getElementById('pName').value,description:document.getElementById('pDesc').value,price:parseFloat(document.getElementById('pPrice').value),image:document.getElementById('pImage').value,sort_order:parseInt(document.getElementById('pSort').value)||0,package_ids:pkg_ids});
+  const d=await apiPut('/admin/products/'+id,{name:document.getElementById('pName').value,description:document.getElementById('pDesc').value,price:parseFloat(document.getElementById('pPrice').value),image:document.getElementById('pImage').value,sort_order:parseInt(document.getElementById('pSort').value)||0});
   if(d){toast('Đã cập nhật');closeModal();loadProducts()}
 }
 function openSortProduct(id){
   const p=ALL_PRODUCTS.find(x=>x.id===id);if(!p)return;
-  const pkgIds=(p.package_ids||'').split(',').map(s=>parseInt(s)).filter(Boolean);
-  if(pkgIds.length===0){toast('Sản phẩm chưa gán gian hàng','err');return}
-  const pkgId=pkgIds[0];
-  const pkgProducts=ALL_PRODUCTS.filter(x=>(x.package_ids||'').split(',').includes(String(pkgId)));
+  const sortedProducts=[...ALL_PRODUCTS].sort((a,b)=>a.sort_order-b.sort_order);
   let rows='';
-  for(const pp of pkgProducts){rows+='<div class="drag-row" draggable="true" data-id="'+pp.id+'"><span class="grip">⠿</span><span class="prod-name">'+pp.name+'</span><span class="prod-price">$'+parseFloat(pp.price).toLocaleString()+'</span></div>';}
-  openModal('<h3>Sắp xếp sản phẩm — Gian hàng #'+pkgId+'</h3><p style="font-size:12px;color:var(--gray);margin-bottom:12px">Kéo thả để sắp xếp thứ tự sản phẩm được quay ra</p><div id="sortList">'+rows+'</div><div class="btn-row"><button class="btn btn-s" onclick="closeModal()">Hủy</button><button class="btn btn-gold" onclick="saveSortOrder('+pkgId+')">Lưu thứ tự</button></div>');
+  for(const pp of sortedProducts){rows+='<div class="drag-row" draggable="true" data-id="'+pp.id+'"><span class="grip">⠿</span><span class="prod-name">'+pp.name+'</span><span class="prod-price">$'+parseFloat(pp.price).toLocaleString()+'</span></div>';}
+  openModal('<h3>Sắp xếp thứ tự sản phẩm</h3><p style="font-size:12px;color:var(--gray);margin-bottom:12px">Kéo thả để sắp xếp thứ tự sản phẩm được quay ra</p><div id="sortList">'+rows+'</div><div class="btn-row"><button class="btn btn-s" onclick="closeModal()">Hủy</button><button class="btn btn-gold" onclick="saveSortOrder()">Lưu thứ tự</button></div>');
   initDrag();
 }
 function initDrag(){
   const list=document.getElementById('sortList');if(!list)return;let dragEl=null;
   list.querySelectorAll('.drag-row').forEach(row=>{row.addEventListener('dragstart',e=>{dragEl=row;row.classList.add('dragging')});row.addEventListener('dragend',()=>{dragEl&&dragEl.classList.remove('dragging');dragEl=null});row.addEventListener('dragover',e=>{e.preventDefault();if(dragEl&&dragEl!==row){const rect=row.getBoundingClientRect();const mid=rect.top+rect.height/2;list.insertBefore(dragEl,e.clientY<mid?row:row.nextSibling)}});});
 }
-async function saveSortOrder(pkgId){
+async function saveSortOrder(){
   const rows=document.querySelectorAll('#sortList .drag-row');
   const orders=[...rows].map((r,i)=>({product_id:parseInt(r.dataset.id),sort_order:i+1}));
-  const d=await apiPut('/admin/products-sort',{package_id:pkgId,product_orders:orders});
+  const d=await apiPut('/admin/products-sort',{product_orders:orders});
   if(d){toast('Đã cập nhật thứ tự');closeModal();loadProducts()}
-}
-function openAssignProduct(id){
-  const p=ALL_PRODUCTS.find(x=>x.id===id);if(!p)return;
-  const currentIds=(p.package_ids||'').split(',').map(s=>parseInt(s));
-  let pkgChecks='';
-  for(const pk of ALL_PACKAGES){const checked=currentIds.includes(pk.id)?'checked':'';pkgChecks+='<label><input type="checkbox" value="'+pk.id+'" '+checked+'>'+pk.name+'</label>';}
-  openModal('<h3>Gán gian hàng: '+p.name+'</h3><div class="fg"><label>Chọn gian hàng (có thể nhiều)</label><div class="checkbox-grid" id="assignPkgs">'+pkgChecks+'</div></div><div class="btn-row"><button class="btn btn-s" onclick="closeModal()">Hủy</button><button class="btn btn-gold" onclick="saveAssign('+id+')">Lưu</button></div>');
-}
-async function saveAssign(id){
-  const pkg_ids=[...document.querySelectorAll('#assignPkgs input:checked')].map(c=>parseInt(c.value));
-  const d=await apiPost('/admin/products/'+id+'/assign',{package_ids:pkg_ids});
-  if(d){toast('Đã gán gian hàng');closeModal();loadProducts()}
 }
 // ===== PACKAGES =====
 async function loadPackages(){
   const d=await apiGet('/admin/packages');
   if(!d)return;
-  let h='<div class="page-title">Gian hàng</div><div class="btn-row" style="margin-bottom:16px"><button class="btn btn-gold" onclick="openAddPackage()">+ Thêm gian hàng</button></div><div class="tbl-wrap"><table><thead><tr><th>ID</th><th>Tên</th><th>VIP</th><th>Nạp tối thiểu</th><th>Tổng đơn</th><th>Đơn/ngày</th><th>Commission</th><th>Sản phẩm</th><th>Người chơi</th><th>Thao tác</th></tr></thead><tbody>';
-  for(const p of d.data){h+='<tr><td>'+p.id+'</td><td><b>'+p.name+'</b></td><td><span class="badge badge-gold">VIP '+p.tier_level+'</span></td><td>$'+parseFloat(p.min_deposit).toLocaleString()+'</td><td>'+p.max_orders+'</td><td>'+p.daily_order_limit+'</td><td>'+p.commission_rate+'%</td><td>'+p.product_count+'</td><td>'+p.user_count+'</td><td style="white-space:nowrap"><button class="btn btn-s btn-sm" onclick="viewPackageProducts('+p.id+')">Xem SP</button> <button class="btn btn-s btn-sm" onclick="addProductToPackage('+p.id+')">Thêm SP</button> <button class="btn btn-s btn-sm" onclick="openEditPackage('+p.id+')">Sửa</button> <button class="btn btn-danger btn-sm" onclick="deletePackage('+p.id+')">Ẩn</button></td></tr>';}
+  let h='<div class="page-title">Gian hàng</div><div class="btn-row" style="margin-bottom:16px"><button class="btn btn-gold" onclick="openAddPackage()">+ Thêm gian hàng</button></div><div class="tbl-wrap"><table><thead><tr><th>ID</th><th>Tên</th><th>VIP</th><th>Nạp tối thiểu</th><th>Tổng đơn</th><th>Đơn/ngày</th><th>Commission</th><th>Người chơi</th><th>Thao tác</th></tr></thead><tbody>';
+  for(const p of d.data){h+='<tr><td>'+p.id+'</td><td><b>'+p.name+'</b></td><td><span class="badge badge-gold">VIP '+p.tier_level+'</span></td><td>$'+parseFloat(p.min_deposit).toLocaleString()+'</td><td>'+p.max_orders+'</td><td>'+p.daily_order_limit+'</td><td>'+p.commission_rate+'%</td><td>'+p.user_count+'</td><td style="white-space:nowrap"><button class="btn btn-s btn-sm" onclick="openEditPackage('+p.id+')">Sửa</button> <button class="btn btn-danger btn-sm" onclick="deletePackage('+p.id+')">Ẩn</button></td></tr>';}
   h+='</tbody></table></div>';
   document.getElementById('mainContent').innerHTML=h;
 }
@@ -321,64 +294,6 @@ function openEditPackage(id){apiGet('/admin/packages').then(d=>{const p=(d?.data
 async function savePackage(id){const b={name:document.getElementById('kName').value,slug:document.getElementById('kSlug').value,min_deposit:parseFloat(document.getElementById('kMin').value)||0,max_orders:parseInt(document.getElementById('kMax').value)||0,daily_order_limit:parseInt(document.getElementById('kDaily').value)||0,commission_rate:parseFloat(document.getElementById('kRate').value)||0,tier_level:parseInt(document.getElementById('kTier').value)||1,sort_order:parseInt(document.getElementById('kSort').value)||0,description:document.getElementById('kDesc').value};const d=id?await apiPut('/admin/packages/'+id,b):await apiPost('/admin/packages',b);if(d){closeModal();loadPackages()}}
 async function deletePackage(id){showConfirmPopup('Ẩn gian hàng này?',async()=>{const d=await apiDel('/admin/packages/'+id);if(d)loadPackages()})}
 
-async function viewPackageProducts(pkgId){
-  const prodData=await apiGet('/admin/products?package_id='+pkgId);
-  const pkgData=await apiGet('/admin/packages');
-  const pkg=(pkgData?.data||[]).find(p=>p.id===pkgId);
-  const products=prodData?.data||[];
-  let h='<h3>Sản phẩm của '+(pkg?.name||'Gian hàng #'+pkgId)+'</h3>';
-  if(products.length){
-    h+='<div class="tbl-wrap" style="margin-top:12px"><table><thead><tr><th style="width:48px">Ảnh</th><th>Tên sản phẩm</th><th>Giá</th><th style="width:80px">Thứ tự</th></tr></thead><tbody>';
-    for(const p of products){
-      const img=p.image||'';
-      h+='<tr data-pid="'+p.id+'"><td><img src="'+img+'" style="width:42px;height:42px;border-radius:6px;object-fit:cover;background:#f5f5f5" onerror="this.src=\'data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 40 40%22><rect fill=%22%23f0f0f0%22 width=%2240%22 height=%2240%22/><text x=%2220%22 y=%2224%22 text-anchor=%22middle%22 font-size=%2212%22 fill=%22%23ccc%22>N/A</text></svg>\'"></td><td><b>'+p.name+'</b><br><span style="font-size:11px;color:var(--gray)">'+(p.description||'')+'</span></td><td style="color:var(--gold);font-weight:600">$'+parseFloat(p.price).toLocaleString()+'</td><td><input type="number" min="1" class="sortInput" value="'+p.pkg_sort+'" data-pid="'+p.id+'" style="width:60px;padding:4px 6px;text-align:center;border:1px solid var(--border);border-radius:4px;font-size:12px" oninput="this.value=this.value.replace(/[^0-9]/g,\'\')"></td></tr>';
-    }
-    h+='</tbody></table></div>';
-  } else { h+='<p style="color:var(--gray);margin-top:12px">Gian hàng chưa có sản phẩm nào</p>'; }
-  h+='<div class="btn-row" style="margin-top:16px"><button class="btn btn-s" onclick="closeModal()">Đóng</button>';
-  if(products.length)h+='<button class="btn btn-gold" onclick="saveProductSort('+pkgId+')">Lưu thứ tự</button>';
-  h+='<button class="btn btn-gold" onclick="closeModal();addProductToPackage('+pkgId+')">Thêm sản phẩm</button></div>';
-  openModal(h);
-}
-async function saveProductSort(pkgId){
-  const inputs=document.querySelectorAll('.sortInput');
-  const orders=[];
-  inputs.forEach(inp=>{orders.push({product_id:parseInt(inp.dataset.pid),sort_order:parseInt(inp.value)||1})});
-  orders.sort((a,b)=>a.sort_order-b.sort_order);
-  const d=await apiPut('/admin/products-sort',{package_id:pkgId,product_orders:orders});
-  if(d){toast('Đã cập nhật thứ tự');closeModal();viewPackageProducts(pkgId)}
-}
-
-async function addProductToPackage(pkgId){
-  const pkgData=await apiGet('/admin/packages');
-  const pkg=(pkgData?.data||[]).find(p=>p.id===pkgId);
-  const allProdData=await apiGet('/admin/products');
-  const allProducts=allProdData?.data||[];
-  const prodInPkg=allProducts.filter(p=>(p.package_ids||'').split(',').includes(String(pkgId)));
-  const inPkgIds=new Set(prodInPkg.map(p=>p.id));
-  const available=allProducts.filter(p=>!inPkgIds.has(p.id));
-  let h='<h3>Thêm sản phẩm vào '+(pkg?.name||'Gian hàng #'+pkgId)+'</h3>';
-  if(available.length){
-    h+='<p style="font-size:12px;color:var(--gray);margin-bottom:12px">Chọn sản phẩm chưa thuộc gian hàng này:</p>';
-    h+='<div style="max-height:400px;overflow-y:auto">';
-    for(const p of available){
-      const img=p.image||'';
-      h+='<label style="display:flex;align-items:center;gap:10px;padding:8px 12px;border:1px solid var(--border);border-radius:6px;margin-bottom:4px;cursor:pointer;transition:all .2s" onmouseenter="this.style.borderColor=\'var(--gold)\'" onmouseleave="this.style.borderColor=\'var(--border)\'"><input type="checkbox" value="'+p.id+'" class="addPkgProd" style="width:auto"><img src="'+img+'" style="width:36px;height:36px;border-radius:4px;object-fit:cover;background:#f5f5f5;flex-shrink:0" onerror="this.src=\'data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 36 36%22><rect fill=%22%23f0f0f0%22 width=%2236%22 height=%2236%22/><text x=%2218%22 y=%2222%22 text-anchor=%22middle%22 font-size=%2210%22 fill=%22%23ccc%22>N/A</text></svg>\'"><span style="flex:1;font-size:13px">'+p.name+'</span><span style="color:var(--gold);font-weight:600;font-size:12px">$'+parseFloat(p.price).toLocaleString()+'</span></label>';
-    }
-    h+='</div>';
-  } else { h+='<p style="color:var(--gray);margin-top:12px">Tất cả sản phẩm đã thuộc gian hàng này</p>'; }
-  h+='<div class="btn-row" style="margin-top:16px"><button class="btn btn-s" onclick="closeModal()">Hủy</button>';
-  if(available.length)h+='<button class="btn btn-gold" onclick="saveAddProductsToPackage('+pkgId+')">Thêm đã chọn</button>';
-  h+='</div>';
-  openModal(h);
-}
-
-async function saveAddProductsToPackage(pkgId){
-  const checked=[...document.querySelectorAll('.addPkgProd:checked')].map(c=>parseInt(c.value));
-  if(!checked.length){toast('Chọn ít nhất 1 sản phẩm','err');return;}
-  const d=await apiPost('/admin/products/assign-batch',{package_id:pkgId,product_ids:checked});
-  if(d){toast('Đã thêm '+checked.length+' sản phẩm');closeModal();loadPackages()}
-}
 
 // ===== USERS =====
 async function loadUsers(search){
@@ -388,20 +303,19 @@ async function loadUsers(search){
   if(!d)return;
   const users=d.data.users||[];
   let h='<div class="page-title">Người dùng</div>';
-  h+='<div style="display:flex;gap:10px;margin-bottom:16px;align-items:center"><input id="userSearch" placeholder="Tìm username, email, họ tên..." style="width:280px" value="'+(search||'')+'" onkeypress="if(event.key===\'Enter\')loadUsers(this.value)"><button class="btn btn-s" onclick="loadUsers(document.getElementById(\'userSearch\').value)">Tìm</button><div style="flex:1"></div><button class="btn btn-gold" onclick="openAddUser()">+ Thêm người dùng</button></div>';
-  h+='<div class="tbl-wrap"><table><thead><tr><th>ID</th><th>Username</th><th>Họ tên</th><th>Email</th><th>Số dư</th><th>Đang khóa</th><th>Trạng thái</th><th>Thao tác</th></tr></thead><tbody>';
+  h+='<div style="display:flex;gap:10px;margin-bottom:16px;align-items:center"><input id="userSearch" placeholder="Tìm username, mã mời, họ tên, SĐT..." style="width:280px" value="'+(search||'')+'" onkeypress="if(event.key===\'Enter\')loadUsers(this.value)"><button class="btn btn-s" onclick="loadUsers(document.getElementById(\'userSearch\').value)">Tìm</button><div style="flex:1"></div><button class="btn btn-gold" onclick="openAddUser()">+ Thêm người dùng</button></div>';
+  h+='<div class="tbl-wrap"><table><thead><tr><th>ID</th><th>Username</th><th>Họ tên</th><th>Mã mời</th><th>Số dư</th><th>Đang khóa</th><th>Đơn hiện tại</th><th>Trạng thái</th><th>Thao tác</th></tr></thead><tbody>';
   for(const u of users){
     const status=u.is_active?'<span class="badge badge-green">Hoạt động</span>':'<span class="badge badge-red">Khóa</span>';
-    const avail=Math.max(0,parseFloat(u.balance||0)-parseFloat(u.locked_amount||0));
-    h+='<tr><td>'+u.id+'</td><td><b>'+u.username+'</b></td><td>'+u.full_name+'</td><td style="font-size:11px">'+u.email+'</td><td>$'+parseFloat(u.balance).toFixed(2)+'</td><td style="color:var(--gold)">$'+parseFloat(u.locked_amount||0).toFixed(2)+'</td><td>'+status+'</td><td><button class="btn btn-s btn-sm" onclick="viewUser('+u.id+')">Chi tiết</button></td></tr>';
+    h+='<tr><td>'+u.id+'</td><td><b>'+u.username+'</b></td><td>'+u.full_name+'</td><td style="font-weight:700;letter-spacing:1px">'+u.ref_code+'</td><td>$'+parseFloat(u.balance).toFixed(2)+'</td><td style="color:var(--gold)">$'+parseFloat(u.locked_amount||0).toFixed(2)+'</td><td>#'+(u.current_order_num||0)+'</td><td>'+status+'</td><td><button class="btn btn-s btn-sm" onclick="viewUser('+u.id+')">Chi tiết</button></td></tr>';
   }
   h+='</tbody></table></div>';
   document.getElementById('mainContent').innerHTML=h;
 }
 function openAddUser(){
-  openModal('<h3>Thêm người dùng mới</h3><div class="fg-half"><div class="fg"><label>Username *</label><input id="uUsername"></div><div class="fg"><label>Email *</label><input id="uEmailAdd" type="email"></div></div><div class="fg-half"><div class="fg"><label>Họ tên</label><input id="uNameAdd"></div><div class="fg"><label>Số điện thoại</label><input id="uPhoneAdd"></div></div><div class="fg-half"><div class="fg"><label>Mật khẩu</label><input id="uPassAdd" type="password" value="user123"></div><div class="fg"><label>Số dư ban đầu ($)</label><input id="uBalanceAdd" type="number" step="0.01" value="0"></div></div><div class="btn-row"><button class="btn btn-s" onclick="closeModal()">Hủy</button><button class="btn btn-gold" onclick="saveAddUser()">Tạo tài khoản</button></div>');
+  openModal('<h3>Thêm người dùng mới</h3><div class="fg-half"><div class="fg"><label>Username *</label><input id="uUsername"></div><div class="fg"><label>Họ tên</label><input id="uNameAdd"></div></div><div class="fg-half"><div class="fg"><label>Số điện thoại</label><input id="uPhoneAdd"></div><div class="fg"><label>Mật khẩu</label><input id="uPassAdd" type="password" value="user123"></div></div><div class="fg"><label>Số dư ban đầu ($)</label><input id="uBalanceAdd" type="number" step="0.01" value="0"></div><div class="btn-row"><button class="btn btn-s" onclick="closeModal()">Hủy</button><button class="btn btn-gold" onclick="saveAddUser()">Tạo tài khoản</button></div>');
 }
-async function saveAddUser(){const b={username:document.getElementById('uUsername').value,email:document.getElementById('uEmailAdd').value,full_name:document.getElementById('uNameAdd').value,phone:document.getElementById('uPhoneAdd').value,password:document.getElementById('uPassAdd').value,balance:parseFloat(document.getElementById('uBalanceAdd').value)||0};const d=await apiPost('/admin/users',b);if(d){closeModal();loadUsers()}}
+async function saveAddUser(){const b={username:document.getElementById('uUsername').value,full_name:document.getElementById('uNameAdd').value,phone:document.getElementById('uPhoneAdd').value,password:document.getElementById('uPassAdd').value,balance:parseFloat(document.getElementById('uBalanceAdd').value)||0};const d=await apiPost('/admin/users',b);if(d){toast('Mã mời: '+(d.data?.ref_code||''));closeModal();loadUsers()}}
 
 // ===== USER DETAIL =====
 let currentUserId=null;
